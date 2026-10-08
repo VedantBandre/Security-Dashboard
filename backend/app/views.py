@@ -5,7 +5,7 @@ from rest_framework import status
 
 from .models import LoginEvent
 from .serializers import LoginEventSerializer, LoginAttemptInputSerializer
-from .detection import is_suspicious
+from .services import ingest_login
 
 # Create your views here.
 class LoginAttemptView(APIView):
@@ -18,24 +18,8 @@ class LoginAttemptView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        data = serializer.validated_data
+        event = ingest_login(serializer.validated_data)
 
-        # Persist the event first so detection can count it
-        event = LoginEvent.objects.create(
-            ip_address=data['ip'],
-            username=data.get('username', ''),
-            success=data['success'],
-            is_suspicious=False,
-        )
-
-        # Re-evaluation of suspicion (new event included)
-        suspicious = is_suspicious(data['ip'])
-
-        if suspicious:
-            # Flag ALL events from this IP
-            LoginEvent.objects.filter(ip_address=data['ip']).update(is_suspicious=True)
-            event.refresh_from_db()
-        
         return Response(LoginEventSerializer(event).data, status=status.HTTP_201_CREATED)
 
 

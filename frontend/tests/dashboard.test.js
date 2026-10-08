@@ -23,12 +23,12 @@ async function waitFor(check) {
     assert.fail('Timed out waiting for the dashboard');
 }
 
-function mount(t, respond, savedTheme) {
+function mount(t, respond, savedTheme, hash = '') {
     const errors = [];
     const console = new VirtualConsole();
     console.on('jsdomError', (error) => errors.push(error));
     const dom = new JSDOM(html, {
-        url: 'http://localhost:5173', runScripts: 'outside-only', virtualConsole: console,
+        url: `http://localhost:5173/${hash}`, runScripts: 'outside-only', virtualConsole: console,
     });
     const calls = [];
     if (savedTheme) dom.window.localStorage.setItem('security-dashboard-theme', savedTheme);
@@ -43,9 +43,9 @@ function mount(t, respond, savedTheme) {
         return nextId;
     };
     dom.window.clearInterval = (id) => intervals.delete(id);
-    dom.window.fetch = async (url) => {
+    dom.window.fetch = async (url, options) => {
         calls.push(url);
-        return respond(url);
+        return respond(url, options);
     };
     t.after(() => {
         dom.window.close();
@@ -151,4 +151,72 @@ test('an empty successful response shows one styled all-clear message', async (t
     app.click('Suspicious');
     await waitFor(() => app.document.querySelector('.all-clear'));
     assert.equal(app.document.querySelectorAll('.empty').length, 1);
+});
+
+test('finding review creates a case and persists notes, assignment, resolution, and deep links', async (t) => {
+    const finding = { id: 10, ip_address: event.ip_address, rule_id: 'brute_force', rule_version: 1,
+        title: 'Repeated failed logins', severity: 'high', threshold: 5, observed_count: 6,
+        window_seconds: 300, window_start: event.timestamp, window_end: event.timestamp,
+        detected_at: event.timestamp, evidence: [event], investigation_id: null };
+    let record = null;
+    const actions = [];
+    const reply = data => ({ ok: true, json: async () => structuredClone(data) });
+    function respond(url, options = {}) {
+        const payload = options.body ? JSON.parse(options.body) : null;
+        if (url === '/findings') return reply([finding]);
+        if (url === '/findings/10') return reply(finding);
+        if (url === '/investigations' && options.method === 'POST') {
+            assert.equal(payload.finding_id, 10);
+            record = { id: 42, title: 'Source investigation', severity: 'high', status: 'new', owner: '',
+                disposition: '', closure_reason: '', revision: 1, finding, notes: [], history: [],
+                created_at: event.timestamp, updated_at: event.timestamp, resolved_at: null };
+            finding.investigation_id = 42;
+            return reply(record);
+        }
+        if (url === '/investigations') return reply(record ? [record] : []);
+        if (url === '/investigations/42' && options.method === 'PATCH') {
+            assert.equal(payload.revision, record.revision);
+            actions.push(payload);
+            const { revision, actor, ...changes } = payload;
+            record = { ...record, ...changes, revision: revision + 1 };
+            if (changes.status === 'resolved') record.resolved_at = event.timestamp;
+            record.history.push({ id: record.revision, actor, action: changes.status === 'resolved' ? 'resolved' : 'updated', before: {}, after: changes, created_at: event.timestamp });
+            return reply(record);
+        }
+        if (url === '/investigations/42/notes') {
+            const note = { id: 1, author: payload.actor, text: payload.text, created_at: event.timestamp };
+            record.notes.push(note);
+            return reply(note);
+        }
+        if (url === '/investigations/42') return reply(record);
+        return success(url);
+    }
+    const app = mount(t, respond);
+    await waitFor(() => app.document.querySelector('.nav-links'));
+    app.click('Investigations');
+    await waitFor(() => app.document.querySelector('.queue-tabs'));
+    await waitFor(() => [...app.document.querySelectorAll('button')].some(button => button.textContent === 'Review finding'));
+    app.click('Review finding');
+    await waitFor(() => app.document.querySelector('.evidence-summary'));
+    app.click('Open investigation');
+    await waitFor(() => [...app.document.querySelectorAll('button')].some(button => button.textContent === 'Start investigation'));
+    app.click('Start investigation');
+    await waitFor(() => record.status === 'investigating' && app.document.querySelector('[name="disposition"]'));
+    app.document.querySelector('[name="owner"]').value = 'Analyst B';
+    app.click('Save assignment & severity');
+    await waitFor(() => app.document.body.textContent.includes('owner: Analyst B') && !app.document.querySelector('[name="owner"]').closest('fieldset').disabled);
+    app.document.querySelector('[name="text"]').value = 'Reviewed the captured evidence.';
+    app.click('Add note');
+    await waitFor(() => app.document.body.textContent.includes('Reviewed the captured evidence.'));
+    app.document.querySelector('[name="disposition"]').value = 'true_positive';
+    app.document.querySelector('[name="closure_reason"]').value = 'Repeated failures confirmed.';
+    app.click('Resolve investigation');
+    await waitFor(() => app.document.body.textContent.includes('Recorded resolution'));
+    assert.equal(record.status, 'resolved');
+    assert.equal(record.notes.length, 1);
+    assert.equal(actions.at(-1).closure_reason, 'Repeated failures confirmed.');
+    const reloaded = mount(t, respond, null, '#investigations/42');
+    await waitFor(() => reloaded.document.body.textContent.includes('Recorded resolution'));
+    assert.match(reloaded.document.body.textContent, /Reviewed the captured evidence/);
+    assert.match(reloaded.document.body.textContent, /Repeated failures confirmed/);
 });

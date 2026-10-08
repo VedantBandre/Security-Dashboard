@@ -5,6 +5,8 @@ const apiProxy = {
   '/login-attempt': 'http://localhost:8000',
   '/events': 'http://localhost:8000',
   '/suspicious': 'http://localhost:8000',
+  '/findings': 'http://localhost:8000',
+  '/investigations': 'http://localhost:8000',
   '/stats': 'http://localhost:8000',
 }
 

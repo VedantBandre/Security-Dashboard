@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import EventTable from './EventTable';
 import EventDetails from './EventDetails';
 import Icon from './Icon';
@@ -12,7 +12,13 @@ export default function EventWorkspace({ events, loading, suspiciousOnly = false
   const [period, setPeriod] = useState('all');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
-  const [sourceIp, setSourceIp] = useState(null);
+  const [sourceIp, setSourceIp] = useState(() => new URLSearchParams(location.hash.split('?')[1]).get('source'));
+  useEffect(() => {
+    const sync = () => { setSourceIp(new URLSearchParams(location.hash.split('?')[1]).get('source')); setPage(1); };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => { window.removeEventListener('hashchange', sync); window.removeEventListener('popstate', sync); };
+  }, []);
   const filtered = filterEvents(sourceIp ? events.filter(event => event.ip_address === sourceIp) : events, { query, result, detection, period });
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);

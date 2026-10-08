@@ -19,10 +19,31 @@ The current boolean event flag is useful for exploration but is not an alert lif
 - Responsive light/dark workspace with a saved theme preference.
 
 Filters, pagination, charts, and export currently operate on events loaded by the
-browser. The backend still returns unpaginated lists. Investigation metadata,
-rule explanations, ownership, and analyst actions are not implemented yet.
+browser. The backend still returns unpaginated lists. Trusted identity and
+multi-user permissions remain future work.
 
-## Next milestone: a persistent investigation loop
+## Delivered: persistent investigation loop
+
+- Structured findings freeze the rule version, threshold, observed count, time
+  window, severity, and chronological matched-event snapshots at detection time.
+- Each IP/rule has a cooldown equal to its detection window. Repeated matching
+  events reuse the finding during that cooldown; later activity can create a new
+  finding. Frozen evidence is not extended or rewritten.
+- One investigation per finding, with owner label, severity, notes, status,
+  disposition, closure reason, and append-only API history.
+- Lifecycle: New → Investigating → Resolved; resolved cases can be reopened to
+  Investigating. Reopening clears the current resolution but retains it in history.
+- Revision checks reject stale case edits with HTTP 409. Notes and history are
+  retained in the same local SQLite database across restarts.
+- Finding review, case queue filters, source-event drilldown, and case deep links.
+- A non-destructive demo command creates normal, brute-force, or rate-abuse traffic.
+
+This milestone uses self-reported analyst labels, not authenticated user identities.
+Existing boolean flags are preserved without fabricating historical findings.
+Queue lists remain unpaginated. Grouping multiple findings into one case and
+multi-user access controls are not implemented yet.
+
+## Reference acceptance story for the delivered milestone
 
 Ship one useful end-to-end story before expanding the number of screens:
 
@@ -34,37 +55,38 @@ Ship one useful end-to-end story before expanding the number of screens:
 6. Record a disposition (true positive, false positive, or benign) and closure reason.
 7. Reopen the page and verify the complete record remains available.
 
-Suggested backend records:
+Backend records:
 
 | Record | Purpose | Important fields |
 | --- | --- | --- |
 | LoginEvent | Immutable reported evidence | Existing fields; later add source and ingestion timestamp |
 | DetectionFinding | Explain why activity was flagged | IP, rule identifier/version, threshold, observed count, window, detection time, related event IDs |
-| Investigation | Track analyst work | Title, severity, status, owner, linked findings, timestamps, disposition, closure reason |
+| Investigation | Track analyst work | Title, severity, status, owner, finding, timestamps, disposition, closure reason |
 | InvestigationNote | Preserve reasoning | Investigation, author, text, creation time |
 | AuditEntry | Record changes | Actor, action, target, before/after values, timestamp |
 
-Change detection from a boolean-only result to structured findings. Store the
-rule parameters and evidence at detection time so later events do not rewrite the
-explanation. Deduplicate findings for the same source/rule/window. Give severity
-an explicit rule-based meaning; avoid invented risk scores.
+Detection produces structured findings in addition to retaining event flags. Rule
+parameters and evidence are stored at detection time so later events do not rewrite
+the explanation. Findings are deduplicated for each source/rule cooldown. Severity
+is rule-based: High for brute-force and Medium for rate abuse; analysts can override
+case severity with the change recorded in history.
 
-Expose validated API actions for notes, assignment, status changes, and resolution.
-Use database transactions for related state changes. Resolving an investigation
-must preserve the original events, findings, and history.
+Validated API actions cover notes, assignment, status changes, and resolution.
+Related writes use database transactions. Resolving an investigation
+preserves the original events, findings, and history.
 
-The UI should add an investigation queue and detail page with a chronological
-evidence timeline. Provide meaningful filters for status, severity, source, and
-owner. Prioritize keyboard operation and a clear empty/error state.
+The UI includes an investigation queue and detail page with a chronological
+evidence timeline, queue filters for status and severity, and search by title,
+source, or owner. The source-history action opens the event explorer with an exact IP filter.
 
-## Following milestone: multi-user and larger datasets
+## Next milestone: trusted identity and larger datasets
 
 - Authentication and analyst/admin permissions, enforced by the backend.
 - Server-side search, time filters, ordering, and pagination. Define whether
   summary counts apply to the selected filters or the whole dataset.
 - Indexed source/timestamp queries and PostgreSQL when needed.
 - Rule configuration with validation and a history of changes.
-- Deterministic demo scenarios: normal traffic, brute-force, and rate abuse.
+- Broader demo datasets covering mixed traffic, cooldowns, and concurrent sources.
 - Saved searches and investigation export.
 - Validation for detection boundaries, deduplication, transitions, permissions,
   and the complete ingestion-to-resolution workflow.
