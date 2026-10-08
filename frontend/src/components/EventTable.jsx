@@ -1,43 +1,23 @@
-export default function EventTable({ events, loading }) {
-    if (loading) return <div className="loading">Loading events...</div>;
-    if (!events.length) return <div className="empty">No events recorded yet</div>;
-    
-    return (
-        <div className="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>IP Address</th>
-                        <th>Username</th>
-                        <th>Time</th>
-                        <th>Result</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                   {events.map((e) => (
-                    <tr key={e.id} className={e.is_suspicious ? 'row-suspicious' : ''}>
-                    <td className="id-col">{e.id}</td>
-                    <td className="ip-col">{e.ip_address}</td>
-                    <td>{e.username || <span className="muted">-</span>}</td>
-                    <td className="time-col">{new Date(e.timestamp).toLocaleTimeString()}</td>
-                    <td>
-                        <span className={`badge ${e.success ? 'badge-ok' : 'badge-fail'}`}>
-                            {e.success ? 'SUCCESS' : 'FAILED'}
-                        </span>
-                    </td>
-                    <td>
-                        {e.is_suspicious ? (
-                            <span className="badge badge-alert">! SUSPICIOUS !</span>
-                        ) : (
-                            <span className="badge badge-clean">CLEAN</span>
-                        )}
-                    </td>
-                    </tr>
-                   ))} 
-                </tbody>
-            </table>
-        </div>
-    );
+import Icon from './Icon';
+
+export default function EventTable({ events, loading, onInspect }) {
+  if (loading) return <div className="loading" role="status">Loading events…</div>;
+  if (!events.length) return <div className="empty">No events match these filters.</div>;
+  return (
+    <div className="table-wrapper">
+      <table>
+        <thead><tr><th scope="col">Event</th><th scope="col">Source IP</th><th scope="col">User</th><th scope="col">Timestamp</th><th scope="col">Result</th><th scope="col">Detection</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{events.map(event => (
+          <tr key={event.id} className={event.is_suspicious ? 'row-suspicious' : ''}>
+            <td className="id-col">#{event.id}</td><td className="ip-col">{event.ip_address}</td>
+            <td>{event.username || <span className="muted">Not provided</span>}</td>
+            <td className="time-col"><time dateTime={event.timestamp}>{event.timestamp ? new Date(event.timestamp).toLocaleString() : 'Unavailable'}</time></td>
+            <td><span className={`badge ${event.success ? 'badge-ok' : 'badge-fail'}`}><span className="badge-dot" />{event.success ? 'Success' : 'Failed'}</span></td>
+            <td><span className={`badge ${event.is_suspicious ? 'badge-alert' : 'badge-clean'}`}>{event.is_suspicious ? 'Flagged' : 'Not flagged'}</span></td>
+            <td><button className="inspect-btn" aria-label={`Inspect event ${event.id}`} onClick={() => onInspect(event)}>Details<Icon name="arrow" size={14} /></button></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
 }

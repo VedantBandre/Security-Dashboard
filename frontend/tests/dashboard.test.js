@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
+import { eventsCsv, filterEvents } from '../src/utils/events.js';
 
 const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
 const entry = html.match(/<script[^>]*src="([^"]+)"/);
@@ -22,7 +23,7 @@ async function waitFor(check) {
     assert.fail('Timed out waiting for the dashboard');
 }
 
-function mount(t, respond) {
+function mount(t, respond, savedTheme) {
     const errors = [];
     const console = new VirtualConsole();
     console.on('jsdomError', (error) => errors.push(error));
@@ -30,6 +31,10 @@ function mount(t, respond) {
         url: 'http://localhost:5173', runScripts: 'outside-only', virtualConsole: console,
     });
     const calls = [];
+    if (savedTheme) dom.window.localStorage.setItem('security-dashboard-theme', savedTheme);
+    // JSDOM does not implement the native dialog lifecycle.
+    dom.window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    dom.window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
     const intervals = new Map();
     let nextId = 0;
     dom.window.setInterval = (callback, milliseconds) => {
@@ -53,7 +58,7 @@ function mount(t, respond) {
         assert.ok(button, `Missing ${text} button`);
         button.click();
     };
-    return { document, calls, intervals, click };
+    return { document, calls, intervals, click, window: dom.window };
 }
 
 function success(url) {
@@ -80,6 +85,48 @@ test('built application renders API data, refreshes, polls, and switches tabs', 
     await waitFor(() => app.calls.includes('/suspicious'));
     await waitFor(() => app.document.querySelector('tbody tr'));
     assert.equal(app.intervals.size, 1, 'Tab changes must clean up the previous poller');
+});
+
+test('theme toggles and restores the saved preference', async (t) => {
+    const app = mount(t, success);
+    await waitFor(() => app.document.documentElement.dataset.theme === 'light');
+    app.click('Dark mode');
+    await waitFor(() => app.document.documentElement.dataset.theme === 'dark');
+    assert.equal(app.window.localStorage.getItem('security-dashboard-theme'), 'dark');
+    const restored = mount(t, success, 'dark');
+    await waitFor(() => restored.document.documentElement.dataset.theme === 'dark');
+    restored.click('Light mode');
+    await waitFor(() => restored.document.documentElement.dataset.theme === 'light');
+});
+
+test('search, inspection, exact IP drilldown, and clearing filters work', async (t) => {
+    const other = { ...event, id: 2, ip_address: '10.0.0.9', username: 'bob', is_suspicious: false };
+    const app = mount(t, url => url.endsWith('/stats') ? success(url) : { ok: true, json: async () => [event, other] });
+    await waitFor(() => app.document.querySelectorAll('tbody tr').length === 2);
+    const input = app.document.querySelector('input[type="search"]');
+    Object.getOwnPropertyDescriptor(app.window.HTMLInputElement.prototype, 'value').set.call(input, 'alice');
+    input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    await waitFor(() => app.document.querySelectorAll('tbody tr').length === 1);
+    app.document.querySelector('[aria-label="Inspect event 1"]').click();
+    await waitFor(() => app.document.querySelector('dialog[open]'));
+    assert.match(app.document.querySelector('dialog').textContent, /10.0.0.99/);
+    app.click('View this IP’s events');
+    await waitFor(() => !app.document.querySelector('dialog'));
+    assert.equal(app.document.querySelectorAll('tbody tr').length, 1);
+    assert.match(app.document.body.textContent, /Source: 10.0.0.99/);
+    app.click('Clear filters');
+    await waitFor(() => app.document.querySelectorAll('tbody tr').length === 2);
+});
+
+test('combined filters handle time boundaries and CSV safely escapes event fields', () => {
+    const now = Date.parse('2026-10-08T12:00:00Z');
+    const recent = { ...event, username: '=HYPERLINK("example")' };
+    const old = { ...event, id: 2, timestamp: '2026-10-06T10:00:00Z', success: true };
+    const filters = { query: '10.0.0', result: 'failed', detection: 'flagged', period: '24h' };
+    assert.deepEqual(filterEvents([recent, old], filters, now), [recent]);
+    assert.deepEqual(filterEvents([recent], { ...filters, result: 'success' }, now), []);
+    assert.match(eventsCsv([recent]), /"'=HYPERLINK\(""example""\)"/);
+    assert.ok(eventsCsv([recent]).startsWith('id,timestamp,ip_address,username,success,is_suspicious\r\n'));
 });
 
 test('failed requests do not show an all-clear and manual refresh recovers', async (t) => {
