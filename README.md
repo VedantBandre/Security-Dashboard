@@ -1,117 +1,109 @@
 # Security Dashboard — Mini SOC System
 
-A lightweight Security Operations Center (SOC) dashboard that logs login events, detects suspicious activity using rule-based heuristics, and visualises everything in a real-time React UI.
+A local Security Operations Center demo built with Django REST Framework, SQLite,
+and React + Vite. It records login attempts, flags suspicious activity using two
+rules, and displays events and counts with five-second polling.
 
----
+## Run locally
 
-## Quick Start
+Prerequisites: Python 3.12 with venv support and Node.js 24.15+ (24.x), or 22.22.2+ (22.x) with npm.
+Run the backend and frontend in separate terminals from the repository root.
 
-```bash
-# Clone and launch
-git clone <your-repo>
-cd security-dashboard
-docker compose up --build
-
-# Frontend → http://localhost:3000
-# Backend API → http://localhost:8000
-```
-
-Run the attack simulator:
+### Backend
 
 ```bash
-cd attack-simulator
-pip install requests
-python attack.py                        # 10 failed logins, default IP
-python attack.py --count 15 --mixed    # 15 failures + legit traffic
-python attack.py --url http://localhost:8000 --ip 10.0.0.99 --count 20
+python3.12 -m venv backend/venv
+source backend/venv/bin/activate
+pip install -r backend/requirements.txt
+python backend/manage.py migrate
+python backend/manage.py runserver 127.0.0.1:8000
 ```
 
----
+Migrations create `backend/db.sqlite3`. This file persists across local server
+restarts and is ignored by Git.
 
-## Problem
-
-Security teams need fast visibility into abnormal authentication patterns. Brute-force and credential-stuffing attacks are high-volume and time-sensitive — a tool that ingests login events, applies detection rules in real time, and surfaces flagged IPs without requiring a SIEM or ML pipeline is useful for small teams and home labs.
-
----
-
-## Approach
-
-### Backend (Django + DRF)
-
-Each `POST /login-attempt` call:
-
-1. Persists the event to SQLite via the `LoginEvent` model.
-2. Calls `detection.is_suspicious(ip)` which applies two rules:
-   - **Brute-force rule**: >5 failed attempts from the same IP in the last 5 minutes.
-   - **Rate rule**: >10 total requests from the same IP in the last 60 seconds.
-3. If flagged, all events from that IP are back-filled with `is_suspicious=True`.
-
-The `/events`, `/suspicious`, and `/stats` endpoints expose the data for the frontend.
-
-### Frontend (React)
-
-- **Events tab**: live table of all events, auto-refreshes every 5 seconds, suspicious rows highlighted in amber.
-- **Suspicious tab**: filtered view of flagged events only.
-- Stat cards at the top show total / success / fail / suspicious counts.
-- No external state library — plain `useState` / `useEffect` with polling.
-
-### Infrastructure
-
-- Docker Compose orchestrates `backend` (Django) and `frontend` (nginx serving React build).
-- nginx proxies `/login-attempt`, `/events`, `/suspicious`, `/stats` to the backend container so the frontend never needs CORS.
-- GitHub Actions runs backend tests and builds both Docker images on every push.
-
----
-
-## API Reference
-
-| Method | Path             | Description               |
-| ------ | ---------------- | ------------------------- |
-| POST   | `/login-attempt` | Record a login attempt    |
-| GET    | `/events`        | All events (newest first) |
-| GET    | `/suspicious`    | Flagged events only       |
-| GET    | `/stats`         | Aggregate counts          |
-
-**POST `/login-attempt` payload:**
-
-```json
-{
-  "ip": "192.168.1.1",
-  "username": "admin",
-  "success": false
-}
-```
-
----
-
-## Limitations
-
-- **SQLite is single-writer**: fine for a demo, but concurrent write spikes under load will produce lock errors. Replace with PostgreSQL for production.
-- **In-process detection**: the detection query runs synchronously inside the request cycle. Under high throughput this adds latency. A queue (Celery + Redis) would decouple ingestion from analysis.
-- **No authentication**: the API is open. Add token auth (DRF `TokenAuthentication`) before exposing this outside a local network.
-- **No persistence across restarts (Docker volume)**: the SQLite file lives inside the container. Mount a named volume or switch to an external DB.
-- **Polling, not push**: the frontend polls every 5 s. Replace with WebSockets (Django Channels) for genuinely real-time updates.
-- **IP spoofing**: the API trusts the `ip` field in the request body. In a real deployment, read the IP from `X-Forwarded-For` or `REMOTE_ADDR`.
-
----
-
-## Future Improvements
-
-- **Persistent storage**: PostgreSQL + named Docker volume.
-- **Real-time frontend**: WebSocket feed via Django Channels.
-- **Alerting**: email / Slack webhook when an IP is flagged.
-- **Geo-IP enrichment**: resolve IPs to country/ASN for the event table.
-- **More detection rules**: user-agent anomalies, distributed attacks across many IPs, impossible travel.
-- **Admin UI**: Django admin or a custom management page to clear flags / whitelist IPs.
-- **Auth**: protect the dashboard and the API behind login.
-- **Export**: CSV / JSON download of event logs.
-
----
-
-## Running Tests Locally
+### Frontend
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python manage.py test app --verbosity=2
+cd frontend
+npm ci
+npm run dev
 ```
+
+Open the local URL printed by Vite (normally `http://localhost:5173`). The Vite
+development server proxies the four API paths to `http://localhost:8000`.
+Keep the backend running while using the dashboard.
+
+To target another backend, set `VITE_API_BASE` in `frontend/.env.local`, for example:
+
+```dotenv
+VITE_API_BASE=http://localhost:8000
+```
+
+Restart Vite after changing this value. The variable is embedded at build time;
+it must not contain secrets.
+
+### Record sample activity
+
+```bash
+curl -X POST http://localhost:8000/login-attempt \
+  -H 'Content-Type: application/json' \
+  -d '{"ip":"192.168.1.1","username":"admin","success":false}'
+```
+
+Repeat the request six times within five minutes to trigger the brute-force rule.
+The Events tab shows all login events; the Suspicious tab shows flagged events.
+The stat cards count events, including suspicious events (not distinct IPs).
+
+## Detection and API
+
+Each login-attempt request validates its input, stores the event, and evaluates:
+
+- More than five failed attempts from one IP in the last five minutes.
+- More than ten total attempts from one IP in the last sixty seconds.
+
+If either rule triggers, all stored events from that IP are flagged, including
+older events. Flags are retained; the app does not automatically clear them.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | `/login-attempt` | Record an attempt: `ip`, `success`, optional `username` |
+| GET | `/events` | All events, newest first |
+| GET | `/suspicious` | Flagged events, newest first |
+| GET | `/stats` | Counts: `total`, `failed`, `succeeded`, `suspicious` |
+
+Invalid input returns HTTP 400. A recorded attempt returns HTTP 201.
+
+## Checks and build
+
+```bash
+# From the repository root, with the backend virtual environment active
+python backend/manage.py test app --verbosity=2
+python backend/manage.py makemigrations --check --dry-run
+
+# Frontend
+cd frontend
+npm run lint
+npm test
+npm run build
+```
+
+The build output is `frontend/dist`. `npm run preview` serves this output for
+local inspection. The development API proxy is also configured for preview.
+For a hosted build, configure `VITE_API_BASE` before building or provide a reverse
+proxy for the API paths on the hosting server.
+
+## Scope and limitations
+
+This repository contains the backend and frontend only. Docker/Compose,
+nginx configuration, an attack simulator, and GitHub Actions are not included.
+
+The backend settings are for local development: DEBUG is enabled, the secret key
+is a development value, CORS allows all origins, and the API has no authentication.
+Production deployment and dependency maintenance are separate work. The API trusts
+the submitted IP field; it is a simulator for reported events, not an authentication
+service. SQLite and synchronous detection suit a small local demo. Events are
+unpaginated, and the UI polls rather than receiving pushed updates.
+
+Potential future work includes authentication, production configuration,
+PostgreSQL, pagination, WebSocket updates, and alerting.

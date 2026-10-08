@@ -1,8 +1,6 @@
-import React from "react";
-
 export default function EventTable({ events, loading }) {
-    if (loading) return <div classname="loading">Loading events...</div>;
-    if (!events.length) return <div classname="empty">No events recorded yet</div>;
+    if (loading) return <div className="loading">Loading events...</div>;
+    if (!events.length) return <div className="empty">No events recorded yet</div>;
     
     return (
         <div className="table-wrapper">

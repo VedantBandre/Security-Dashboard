@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function StatCard({ label, value, variant }) {
     return (
         <div className={`stat-card stat-card--${variant || 'default'}`}>

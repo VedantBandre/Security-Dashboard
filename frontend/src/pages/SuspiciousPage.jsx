@@ -1,44 +1,26 @@
-import React, { useEffect, useState, useCallback } from 'react';
 import { fetchSuspicious } from '../api';
 import EventTable from '../components/EventTable';
+import usePolling from '../hooks/usePolling';
+
+const INITIAL_EVENTS = [];
 
 export default function SuspiciousPage() {
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    
-    const load = useCallback(async () => {
-        try {
-            const data = await fetchSuspicious();
-            setEvents(data);
-            setError(null);
-        } catch (e) {
-            setError(e.message);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-    
-    useEffect(() => {
-        load();
-        const id = setInterval(load, 5000);
-        return () => clearInterval(id);
-    }, [load]);
-    
+    const { data: events, loading, error, refresh } = usePolling(fetchSuspicious, INITIAL_EVENTS);
+
     return (
         <section className="page">
             <div className="page-header">
                 <h1>! Suspicious Activity !</h1>
-                <button className="btn" onClick={load}>Refresh</button>
+                <button className="btn" onClick={refresh}>Refresh</button>
             </div>
 
-            {error && <div className="error-banner">! {error} !</div>}
+            {error && <div className="error-banner" role="alert">! {error} !</div>}
 
-            {!loading && events.length === 0 && (
+            {!loading && !error && events.length === 0 && (
                 <div className="empty all-clear">No suspicious activity detected</div>
             )}
 
-            <EventTable events={events} loading={loading} />
+            {(loading || events.length > 0) && <EventTable events={events} loading={loading} />}
         </section>
     );
 }
