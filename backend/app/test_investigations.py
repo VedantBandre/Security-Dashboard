@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
 from .models import LoginEvent, DetectionFinding, Investigation, AuditEntry
@@ -10,6 +11,9 @@ from .detection import is_suspicious
 class InvestigationWorkflowTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = get_user_model().objects.create_user(username='analyst-a', is_staff=True)
+        self.other = get_user_model().objects.create_user(username='analyst-b', is_staff=True)
+        self.client.force_authenticate(self.user)
         self.ip = '203.0.113.10'
 
     def ingest(self, count=6, success=False):
@@ -20,12 +24,12 @@ class InvestigationWorkflowTests(TestCase):
 
     def create_case(self):
         finding = self.ingest()
-        response = self.client.post('/investigations', {'finding_id': finding.id, 'actor': 'Analyst A'}, format='json')
+        response = self.client.post('/investigations', {'finding_id': finding.id}, format='json')
         self.assertEqual(response.status_code, 201)
         return finding, response.data
 
     def update(self, case, **changes):
-        return self.client.patch(f"/investigations/{case['id']}", {'actor': 'Analyst A', 'revision': case['revision'], **changes}, format='json')
+        return self.client.patch(f"/investigations/{case['id']}", {'revision': case['revision'], **changes}, format='json')
 
     def test_finding_freezes_evidence_and_deduplicates_burst(self):
         finding = self.ingest()
@@ -66,7 +70,7 @@ class InvestigationWorkflowTests(TestCase):
 
     def test_case_creation_is_idempotent_per_finding(self):
         finding, case = self.create_case()
-        again = self.client.post('/investigations', {'finding_id': finding.id, 'actor': 'Analyst B'}, format='json')
+        again = self.client.post('/investigations', {'finding_id': finding.id}, format='json')
         self.assertEqual(again.status_code, 200)
         self.assertEqual(case['id'], again.data['id'])
         self.assertEqual(Investigation.objects.count(), 1)
@@ -74,12 +78,13 @@ class InvestigationWorkflowTests(TestCase):
 
     def test_full_workflow_persists_evidence_notes_resolution_and_reopen_history(self):
         finding, case = self.create_case()
-        case = self.update(case, status='investigating', owner='Analyst A').data
-        note = self.client.post(f"/investigations/{case['id']}/notes", {'actor': 'Analyst A', 'text': 'Reviewed six failures from the same source.'}, format='json')
+        case = self.update(case, status='investigating', owner_user=self.user.id).data
+        note = self.client.post(f"/investigations/{case['id']}/notes", {'text': 'Reviewed six failures from the same source.'}, format='json')
         self.assertEqual(note.status_code, 201)
         closed = self.update(case, status='resolved', disposition='true_positive', closure_reason='Repeated failures confirmed by captured evidence.')
         self.assertEqual(closed.status_code, 200)
         self.client = APIClient()
+        self.client.force_authenticate(self.user)
         persisted = self.client.get(f"/investigations/{case['id']}").data
         self.assertEqual(persisted['status'], 'resolved')
         self.assertEqual(persisted['disposition'], 'true_positive')
@@ -105,10 +110,10 @@ class InvestigationWorkflowTests(TestCase):
 
     def test_stale_revision_cannot_overwrite_assignment(self):
         _, old = self.create_case()
-        updated = self.update(old, owner='Analyst B')
+        updated = self.update(old, owner_user=self.other.id)
         self.assertEqual(updated.status_code, 200)
-        self.assertEqual(self.update(old, owner='Analyst C').status_code, 409)
-        self.assertEqual(Investigation.objects.get(pk=old['id']).owner, 'Analyst B')
+        self.assertEqual(self.update(old, owner_user=None).status_code, 409)
+        self.assertEqual(Investigation.objects.get(pk=old['id']).owner, 'analyst-b')
         self.assertEqual(AuditEntry.objects.count(), 2)
 
     def test_resolved_decision_cannot_be_rewritten_without_reopening(self):

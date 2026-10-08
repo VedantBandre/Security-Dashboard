@@ -5,6 +5,9 @@ from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .accounts import StrictInput
+from .permissions import role_for
+from django.contrib.auth import get_user_model
 from .models import DetectionFinding, Investigation, InvestigationNote, AuditEntry
 
 
@@ -25,13 +28,13 @@ class FindingDetailSerializer(FindingSummarySerializer):
 class NoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestigationNote
-        fields = ['id', 'author', 'text', 'created_at']
+        fields = ['id', 'author', 'author_user', 'text', 'created_at']
 
 
 class AuditSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditEntry
-        fields = ['id', 'actor', 'action', 'before', 'after', 'created_at']
+        fields = ['id', 'actor', 'actor_user', 'action', 'before', 'after', 'created_at']
 
 
 class InvestigationSummarySerializer(serializers.ModelSerializer):
@@ -40,7 +43,7 @@ class InvestigationSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Investigation
         fields = ['id', 'title', 'severity', 'status', 'owner', 'disposition', 'closure_reason',
-                  'created_at', 'updated_at', 'resolved_at', 'revision', 'finding']
+                  'created_at', 'updated_at', 'resolved_at', 'revision', 'finding', 'owner_user']
 
 
 class InvestigationDetailSerializer(InvestigationSummarySerializer):
@@ -52,30 +55,34 @@ class InvestigationDetailSerializer(InvestigationSummarySerializer):
         fields = InvestigationSummarySerializer.Meta.fields + ['notes', 'history']
 
 
-class CreateInput(serializers.Serializer):
+class OwnerInput(StrictInput):
+    def validate_owner_user(self, user):
+        if user and role_for(user) not in {'admin', 'analyst'}:
+            raise serializers.ValidationError('Assign an active analyst or administrator.')
+        return user
+
+
+class CreateInput(OwnerInput):
     finding_id = serializers.IntegerField(min_value=1)
     title = serializers.CharField(max_length=200, required=False)
-    owner = serializers.CharField(max_length=150, allow_blank=True, required=False, default='')
-    actor = serializers.CharField(max_length=150)
+    owner_user = serializers.PrimaryKeyRelatedField(queryset=get_user_model().objects.filter(is_active=True), required=False, allow_null=True, default=None)
 
 
-class UpdateInput(serializers.Serializer):
+class UpdateInput(OwnerInput):
     revision = serializers.IntegerField(min_value=1)
-    actor = serializers.CharField(max_length=150)
     title = serializers.CharField(max_length=200, required=False)
-    owner = serializers.CharField(max_length=150, allow_blank=True, required=False)
+    owner_user = serializers.PrimaryKeyRelatedField(queryset=get_user_model().objects.filter(is_active=True), required=False, allow_null=True)
     severity = serializers.ChoiceField(choices=Investigation.SEVERITIES, required=False)
     status = serializers.ChoiceField(choices=Investigation.STATUSES, required=False)
     disposition = serializers.ChoiceField(choices=Investigation.DISPOSITIONS, required=False)
     closure_reason = serializers.CharField(max_length=2000, required=False)
 
 
-class NoteInput(serializers.Serializer):
-    actor = serializers.CharField(max_length=150)
+class NoteInput(StrictInput):
     text = serializers.CharField(max_length=5000)
 
 
-class QueueFilters(serializers.Serializer):
+class QueueFilters(StrictInput):
     status = serializers.ChoiceField(choices=Investigation.STATUSES, required=False)
     severity = serializers.ChoiceField(choices=Investigation.SEVERITIES, required=False)
     source = serializers.IPAddressField(required=False)
@@ -84,7 +91,7 @@ class QueueFilters(serializers.Serializer):
 
 def snapshot(case):
     return {field: getattr(case, field) for field in
-            ['title', 'severity', 'status', 'owner', 'disposition', 'closure_reason', 'revision']}
+            ['title', 'severity', 'status', 'owner', 'owner_user_id', 'disposition', 'closure_reason', 'revision']}
 
 
 def detail(case):
@@ -124,10 +131,11 @@ class InvestigationsView(APIView):
         finding = get_object_or_404(DetectionFinding.objects.select_for_update(), pk=data['finding_id'])
         case, created = Investigation.objects.get_or_create(finding=finding, defaults={
             'title': data.get('title', f"{finding.title} — {finding.ip_address}"),
-            'severity': finding.severity, 'owner': data['owner'],
+            'severity': finding.severity, 'owner_user': data['owner_user'],
+            'owner': data['owner_user'].get_username() if data['owner_user'] else '',
         })
         if created:
-            AuditEntry.objects.create(investigation=case, actor=data['actor'], action='created', after=snapshot(case))
+            AuditEntry.objects.create(investigation=case, actor=request.user.get_username(), actor_user=request.user, action='created', after=snapshot(case))
         return Response(detail(case), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -156,20 +164,22 @@ class InvestigationView(APIView):
         elif any(key in data for key in ['disposition', 'closure_reason']):
             raise serializers.ValidationError({'resolution': 'Resolution fields are only accepted when resolving.'})
         before = snapshot(case)
-        updates = {key: value for key, value in data.items() if key not in ['actor', 'revision']}
+        updates = {key: value for key, value in data.items() if key != 'revision'}
         if not updates:
             raise serializers.ValidationError({'detail': 'Provide at least one change.'})
         if next_status == 'resolved' and case.status != 'resolved':
             updates['resolved_at'] = timezone.now()
         elif case.status == 'resolved' and next_status == 'investigating':
             updates.update(resolved_at=None, disposition='', closure_reason='')
+        if 'owner_user' in updates:
+            updates['owner'] = updates['owner_user'].get_username() if updates['owner_user'] else ''
         updates.update(updated_at=timezone.now(), revision=F('revision') + 1)
         changed = Investigation.objects.filter(pk=case.pk, revision=data['revision']).update(**updates)
         if not changed:
             return Response({'detail': 'This investigation changed. Reload it before saving.'}, status=409)
         case.refresh_from_db()
         action = 'resolved' if next_status == 'resolved' and before['status'] != next_status else 'reopened' if before['status'] == 'resolved' and next_status != 'resolved' else 'updated'
-        AuditEntry.objects.create(investigation=case, actor=data['actor'], action=action, before=before, after=snapshot(case))
+        AuditEntry.objects.create(investigation=case, actor=request.user.get_username(), actor_user=request.user, action=action, before=before, after=snapshot(case))
         return Response(detail(case))
 
 
@@ -180,6 +190,6 @@ class NotesView(APIView):
         serializer.is_valid(raise_exception=True)
         case = get_object_or_404(Investigation.objects.select_for_update(), pk=pk)
         data = serializer.validated_data
-        note = InvestigationNote.objects.create(investigation=case, author=data['actor'], text=data['text'])
-        AuditEntry.objects.create(investigation=case, actor=data['actor'], action='note_added', after={'note_id': note.id})
+        note = InvestigationNote.objects.create(investigation=case, author=request.user.get_username(), author_user=request.user, text=data['text'])
+        AuditEntry.objects.create(investigation=case, actor=request.user.get_username(), actor_user=request.user, action='note_added', after={'note_id': note.id})
         return Response(NoteSerializer(note).data, status=201)

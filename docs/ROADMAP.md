@@ -19,8 +19,7 @@ The current boolean event flag is useful for exploration but is not an alert lif
 - Responsive light/dark workspace with a saved theme preference.
 
 Filters, pagination, charts, and export currently operate on events loaded by the
-browser. The backend still returns unpaginated lists. Trusted identity and
-multi-user permissions remain future work.
+browser. The backend still returns unpaginated lists. Sign-in and backend workspace permissions are implemented.
 
 ## Delivered: persistent investigation loop
 
@@ -38,10 +37,11 @@ multi-user permissions remain future work.
 - Finding review, case queue filters, source-event drilldown, and case deep links.
 - A non-destructive demo command creates normal, brute-force, or rate-abuse traffic.
 
-This milestone uses self-reported analyst labels, not authenticated user identities.
+Historical self-reported labels remain preserved as legacy records; new authors
+and assignments refer to authenticated accounts.
 Existing boolean flags are preserved without fabricating historical findings.
 Queue lists remain unpaginated. Grouping multiple findings into one case and
-multi-user access controls are not implemented yet.
+organization-level isolation is not implemented yet.
 
 ## Reference acceptance story for the delivered milestone
 
@@ -79,9 +79,21 @@ The UI includes an investigation queue and detail page with a chronological
 evidence timeline, queue filters for status and severity, and search by title,
 source, or owner. The source-history action opens the event explorer with an exact IP filter.
 
-## Next milestone: trusted identity and larger datasets
+## Delivered: authenticated workspace access
 
-- Authentication and analyst/admin permissions, enforced by the backend.
+- Session sign-in/sign-out, CSRF-protected login and mutations, HttpOnly cookies.
+- Backend-enforced Viewer, Analyst, and Administrator roles.
+- Account-backed ownership, note authors, and decision actors; forged labels rejected.
+- Administrator account provisioning, role/activation controls, last-admin protection,
+  and access-change history. Deactivation preserves attribution.
+- Login throttling for the local demo and real-cookie permission/CSRF tests.
+- Legacy records retained without attributing unverified labels to real accounts.
+
+This is a single shared workspace. Production dependency upgrades, HTTPS configuration,
+shared abuse protection, recovery, and MFA remain separate deployment work.
+
+## Next milestone: larger datasets
+
 - Server-side search, time filters, ordering, and pagination. Define whether
   summary counts apply to the selected filters or the whole dataset.
 - Indexed source/timestamp queries and PostgreSQL when needed.

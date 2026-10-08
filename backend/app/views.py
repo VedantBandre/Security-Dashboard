@@ -6,6 +6,8 @@ from rest_framework import status
 from .models import LoginEvent
 from .serializers import LoginEventSerializer, LoginAttemptInputSerializer
 from .services import ingest_login
+from .permissions import AdminPermission
+from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 class LoginAttemptView(APIView):
@@ -13,6 +15,7 @@ class LoginAttemptView(APIView):
     POST /login-attempt
     Record a login attempt and run detection logic.
     """
+    permission_classes = [IsAuthenticated, AdminPermission]
     def post(self, request):
         serializer = LoginAttemptInputSerializer(data=request.data)
         if not serializer.is_valid():
