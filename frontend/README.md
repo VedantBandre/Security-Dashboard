@@ -1,16 +1,27 @@
-# React + Vite
+# Security Dashboard frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite frontend for the Django API. See the [project README](../README.md)
+for backend setup, sample events, and the API reference.
 
-Currently, two official plugins are available:
+Use Node.js 24.15+ (24.x), or 22.22.2+ (22.x) and npm:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm ci
+npm run dev
+```
 
-## React Compiler
+Vite normally serves the dashboard at `http://localhost:5173` and proxies API
+requests to `http://localhost:8000`. Both servers must be running.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Set `VITE_API_BASE` in `.env.local` to use a different backend. Restart the dev
+server after changing it; production builds embed the value at build time.
 
-## Expanding the ESLint configuration
+```bash
+npm run lint
+npm test
+npm run build
+npm run preview
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Build output is in `dist`. Preview uses the same local API proxy as development.
+A hosted build needs its own API reverse proxy or a configured `VITE_API_BASE`.
