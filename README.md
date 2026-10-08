@@ -105,5 +105,13 @@ the submitted IP field; it is a simulator for reported events, not an authentica
 service. SQLite and synchronous detection suit a small local demo. Events are
 unpaginated, and the UI polls rather than receiving pushed updates.
 
-Potential future work includes authentication, production configuration,
-PostgreSQL, pagination, WebSocket updates, and alerting.
+## Investigation workspace
+
+The UI supports a saved light/dark theme, hourly authentication activity, top
+source IPs, search, outcome/detection/time filters, 25-row pages, event details,
+source-IP drilldown, and CSV export of the filtered results. Filters and pagination
+currently run in the browser over the complete API response.
+
+The next milestone is persistent investigations with rule evidence, ownership,
+notes, status changes, and recorded outcomes. See [the development roadmap](docs/ROADMAP.md)
+for the proposed data model, delivery order, and later deployment work.
