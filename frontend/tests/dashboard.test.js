@@ -23,7 +23,7 @@ async function waitFor(check) {
     assert.fail('Timed out waiting for the dashboard');
 }
 
-function mount(t, respond, savedTheme, hash = '') {
+function mount(t, respond, savedTheme, hash = '', defaultSession = true) {
     const errors = [];
     const console = new VirtualConsole();
     console.on('jsdomError', (error) => errors.push(error));
@@ -44,6 +44,8 @@ function mount(t, respond, savedTheme, hash = '') {
     };
     dom.window.clearInterval = (id) => intervals.delete(id);
     dom.window.fetch = async (url, options) => {
+        if (defaultSession && url === '/auth/session') return { ok: true, json: async () => ({ user: { id: 1, username: 'analyst-a', display_name: 'Analyst A', role: 'analyst' }, csrf_token: 'test-csrf' }) };
+        if (defaultSession && url === '/users/assignable') return { ok: true, json: async () => [ { id: 1, username: 'analyst-a', display_name: 'Analyst A' }, { id: 2, username: 'analyst-b', display_name: 'Analyst B' } ] };
         calls.push(url);
         return respond(url, options);
     };
@@ -89,12 +91,12 @@ test('built application renders API data, refreshes, polls, and switches tabs', 
 
 test('theme toggles and restores the saved preference', async (t) => {
     const app = mount(t, success);
-    await waitFor(() => app.document.documentElement.dataset.theme === 'light');
+    await waitFor(() => app.document.querySelector('.theme-toggle') && app.document.documentElement.dataset.theme === 'light');
     app.click('Dark mode');
     await waitFor(() => app.document.documentElement.dataset.theme === 'dark');
     assert.equal(app.window.localStorage.getItem('security-dashboard-theme'), 'dark');
     const restored = mount(t, success, 'dark');
-    await waitFor(() => restored.document.documentElement.dataset.theme === 'dark');
+    await waitFor(() => restored.document.querySelector('.theme-toggle') && restored.document.documentElement.dataset.theme === 'dark');
     restored.click('Light mode');
     await waitFor(() => restored.document.documentElement.dataset.theme === 'light');
 });
@@ -131,7 +133,7 @@ test('combined filters handle time boundaries and CSV safely escapes event field
 
 test('failed requests do not show an all-clear and manual refresh recovers', async (t) => {
     let failing = true;
-    const app = mount(t, (url) => failing ? { ok: false } : success(url));
+    const app = mount(t, (url) => failing ? { ok: false, json: async () => ({ detail: `Failed to fetch ${url}` }) } : success(url));
     await waitFor(() => app.document.querySelector('.error-banner'));
     assert.equal(app.document.querySelector('.empty'), null);
     app.click('Suspicious');
@@ -177,14 +179,17 @@ test('finding review creates a case and persists notes, assignment, resolution, 
         if (url === '/investigations/42' && options.method === 'PATCH') {
             assert.equal(payload.revision, record.revision);
             actions.push(payload);
-            const { revision, actor, ...changes } = payload;
+            const { revision, ...changes } = payload;
+            assert.equal(payload.actor, undefined);
+            if ('owner_user' in changes) changes.owner = changes.owner_user === 2 ? 'analyst-b' : '';
+            const actor = 'analyst-a';
             record = { ...record, ...changes, revision: revision + 1 };
             if (changes.status === 'resolved') record.resolved_at = event.timestamp;
             record.history.push({ id: record.revision, actor, action: changes.status === 'resolved' ? 'resolved' : 'updated', before: {}, after: changes, created_at: event.timestamp });
             return reply(record);
         }
         if (url === '/investigations/42/notes') {
-            const note = { id: 1, author: payload.actor, text: payload.text, created_at: event.timestamp };
+            const note = { id: 1, author: 'analyst-a', author_user: 1, text: payload.text, created_at: event.timestamp };
             record.notes.push(note);
             return reply(note);
         }
@@ -202,9 +207,9 @@ test('finding review creates a case and persists notes, assignment, resolution, 
     await waitFor(() => [...app.document.querySelectorAll('button')].some(button => button.textContent === 'Start investigation'));
     app.click('Start investigation');
     await waitFor(() => record.status === 'investigating' && app.document.querySelector('[name="disposition"]'));
-    app.document.querySelector('[name="owner"]').value = 'Analyst B';
+    app.document.querySelector('[name="owner_user"]').value = '2';
     app.click('Save assignment & severity');
-    await waitFor(() => app.document.body.textContent.includes('owner: Analyst B') && !app.document.querySelector('[name="owner"]').closest('fieldset').disabled);
+    await waitFor(() => app.document.body.textContent.includes('owner: analyst-b') && !app.document.querySelector('[name="owner_user"]').closest('fieldset').disabled);
     app.document.querySelector('[name="text"]').value = 'Reviewed the captured evidence.';
     app.click('Add note');
     await waitFor(() => app.document.body.textContent.includes('Reviewed the captured evidence.'));
@@ -219,4 +224,99 @@ test('finding review creates a case and persists notes, assignment, resolution, 
     await waitFor(() => reloaded.document.body.textContent.includes('Recorded resolution'));
     assert.match(reloaded.document.body.textContent, /Reviewed the captured evidence/);
     assert.match(reloaded.document.body.textContent, /Repeated failures confirmed/);
+});
+
+test('sign-in gates data, sends CSRF, and sign-out removes the workspace', async t => {
+    let signedIn = false;
+    const user = { id: 1, username: 'analyst-a', display_name: 'Analyst A', role: 'analyst' };
+    const reply = data => ({ ok: true, json: async () => data });
+    const app = mount(t, (url, options) => {
+        if (url === '/auth/session') return reply({ user: signedIn ? user : null, csrf_token: 'initial-token' });
+        if (url === '/auth/login') {
+            assert.equal(options.headers['X-CSRFToken'], 'initial-token');
+            assert.equal(options.credentials, 'include');
+            assert.deepEqual(JSON.parse(options.body), { username: 'analyst-a', password: 'test-password' });
+            signedIn = true;
+            return reply({ user, csrf_token: 'rotated-token' });
+        }
+        if (url === '/auth/logout') {
+            assert.equal(options.headers['X-CSRFToken'], 'rotated-token');
+            signedIn = false;
+            return reply({ user: null, csrf_token: 'logout-token' });
+        }
+        assert.ok(signedIn, 'No workspace requests before authentication');
+        return success(url);
+    }, null, '', false);
+    await waitFor(() => app.document.querySelector('[name="password"]'));
+    assert.deepEqual(app.calls, ['/auth/session']);
+    app.document.querySelector('[name="username"]').value = 'analyst-a';
+    app.document.querySelector('[name="password"]').value = 'test-password';
+    app.document.querySelector('form').dispatchEvent(new app.window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => app.document.querySelector('tbody tr'));
+    assert.equal(app.window.localStorage.length, 1, 'Only the theme is persisted');
+    app.click('Sign out');
+    await waitFor(() => app.document.querySelector('[name="password"]'));
+    assert.equal(app.document.querySelector('tbody'), null);
+    assert.equal(app.intervals.size, 0);
+});
+
+test('session expiry clears event data and returns to sign-in', async t => {
+    let expired = false;
+    const app = mount(t, url => {
+        if (url === '/auth/session') return { ok: true, json: async () => ({ user: expired ? null : { id: 1, username: 'viewer', display_name: 'Viewer', role: 'viewer' }, csrf_token: 'token' }) };
+        if (expired) return { ok: false, json: async () => ({ detail: 'Sign in required', code: 'not_authenticated' }) };
+        return success(url);
+    }, null, '', false);
+    await waitFor(() => app.document.querySelector('tbody tr'));
+    expired = true;
+    app.click('Refresh');
+    await waitFor(() => app.document.querySelector('[name="password"]'));
+    assert.equal(app.document.querySelector('tbody'), null);
+    assert.equal(app.intervals.size, 0);
+});
+
+test('viewers can review findings but cannot open new cases or manage accounts', async t => {
+    const finding = { id: 10, title: 'Repeated failures', ip_address: event.ip_address, severity: 'high', evidence: [event], window_start: event.timestamp, window_end: event.timestamp, observed_count: 6, threshold: 5, window_seconds: 300, investigation_id: null };
+    const app = mount(t, url => ({ ok: true, json: async () => url === '/auth/session' ? { user: { id: 1, username: 'viewer', display_name: 'Viewer', role: 'viewer' }, csrf_token: 'token' } : url === '/findings' ? [finding] : url === '/findings/10' ? finding : [] }), null, '#investigations', false);
+    await waitFor(() => app.document.querySelector('.queue-tabs'));
+    await waitFor(() => [...app.document.querySelectorAll('button')].some(button => button.textContent.startsWith('Review finding')));
+    assert.ok(![...app.document.querySelectorAll('button')].some(button => button.textContent === 'Accounts'));
+    assert.match(app.document.body.textContent, /Read-only access/);
+    app.click('Review finding');
+    await waitFor(() => app.document.querySelector('.evidence-summary'));
+    assert.ok([...app.document.querySelectorAll('button')].find(button => button.textContent === 'Open investigation').disabled);
+});
+
+test('administrators provision accounts and update access with audited refreshes', async t => {
+    const me = { id: 1, username: 'admin', display_name: 'Administrator', role: 'admin', is_active: true };
+    const users = [me];
+    const history = [];
+    const writes = [];
+    const app = mount(t, (url, options = {}) => {
+        const reply = data => ({ ok: true, json: async () => structuredClone(data) });
+        if (url === '/auth/session') return reply({ user: me, csrf_token: 'admin-token' });
+        if (url === '/users/access-history') return reply(history);
+        if (url === '/users' && options.method === 'POST') {
+            assert.equal(options.headers['X-CSRFToken'], 'admin-token');
+            const data = JSON.parse(options.body);
+            writes.push(data);
+            users.push({ id: 2, username: data.username, role: data.role, is_active: true });
+            history.push({ id: 1, actor: 'admin', target: data.username, action: 'created', after: users[1], created_at: event.timestamp });
+            return reply(users[1]);
+        }
+        if (url === '/users/2') { users[1].is_active = false; return reply(users[1]); }
+        if (url === '/users') return reply(users);
+        return success(url);
+    }, null, '#accounts', false);
+    await waitFor(() => app.document.querySelector('[name="password"]'));
+    app.document.querySelector('[name="username"]').value = 'new-analyst';
+    app.document.querySelector('[name="password"]').value = 'initial-password';
+    app.document.querySelector('form').dispatchEvent(new app.window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => app.document.querySelector('[aria-label="Role for new-analyst"]'));
+    assert.deepEqual(writes, [{ username: 'new-analyst', password: 'initial-password', role: 'analyst' }]);
+    assert.equal(app.document.querySelector('[name="password"]').value, '');
+    const row = app.document.querySelector('[aria-label="Role for new-analyst"]').closest('tr');
+    row.querySelector('button').click();
+    await waitFor(() => app.document.querySelector('[aria-label="Role for new-analyst"]').closest('tr').textContent.includes('Inactive'));
+    assert.match(app.document.body.textContent, /admin · created · new-analyst/);
 });

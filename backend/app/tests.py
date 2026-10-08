@@ -1,5 +1,6 @@
 from ipaddress import ip_address
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 from unittest.mock import patch
@@ -73,6 +74,7 @@ class DetectionLogicTest(TestCase):
 class LoginAttemptAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.client.force_authenticate(get_user_model().objects.create_user(username='test-admin', is_staff=True))
     
     def test_post_login_attempt_creates_event(self):
         payload = {'ip': '172.16.0.1', 'username': 'alice', 'success': False}

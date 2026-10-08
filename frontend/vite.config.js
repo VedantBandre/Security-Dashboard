@@ -1,14 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const apiProxy = {
-  '/login-attempt': 'http://localhost:8000',
-  '/events': 'http://localhost:8000',
-  '/suspicious': 'http://localhost:8000',
-  '/findings': 'http://localhost:8000',
-  '/investigations': 'http://localhost:8000',
-  '/stats': 'http://localhost:8000',
-}
+// Preserve the browser Host so Django can validate same-origin CSRF requests.
+const apiProxy = Object.fromEntries([
+  '/login-attempt', '/events', '/suspicious', '/auth', '/users',
+  '/findings', '/investigations', '/stats',
+].map(path => [path, { target: 'http://127.0.0.1:8000', changeOrigin: false }]))
 
 export default defineConfig({
   plugins: [react()],

@@ -16,3 +16,15 @@ urlpatterns += [
     path('investigations/<int:pk>', InvestigationView.as_view(), name='investigation'),
     path('investigations/<int:pk>/notes', NotesView.as_view(), name='investigation-notes'),
 ]
+
+
+from .accounts import session_view, login_view, logout_view, AssignableUsersView, UsersView, UserView, AccessHistoryView
+urlpatterns += [
+    path('auth/session', session_view, name='auth-session'),
+    path('auth/login', login_view, name='auth-login'),
+    path('auth/logout', logout_view, name='auth-logout'),
+    path('users/assignable', AssignableUsersView.as_view(), name='assignable-users'),
+    path('users/access-history', AccessHistoryView.as_view(), name='access-history'),
+    path('users', UsersView.as_view(), name='users'),
+    path('users/<int:pk>', UserView.as_view(), name='user'),
+]

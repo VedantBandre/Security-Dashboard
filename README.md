@@ -16,6 +16,7 @@ python3.12 -m venv backend/venv
 source backend/venv/bin/activate
 pip install -r backend/requirements.txt
 python backend/manage.py migrate
+python backend/manage.py createsuperuser
 python backend/manage.py runserver 127.0.0.1:8000
 ```
 
@@ -31,29 +32,33 @@ npm run dev
 ```
 
 Open the local URL printed by Vite (normally `http://localhost:5173`). The Vite
-development server proxies the four API paths to `http://localhost:8000`.
+development server proxies the API paths to `http://localhost:8000`.
 Keep the backend running while using the dashboard.
 
-To target another backend, set `VITE_API_BASE` in `frontend/.env.local`, for example:
+Sign in with the administrator account created above. In **Accounts**, provision
+individual Analyst or Viewer accounts. Password recovery is an operator action:
+`python backend/manage.py changepassword <username>`. Accounts are deactivated
+rather than deleted so case attribution remains intact.
 
-```dotenv
-VITE_API_BASE=http://localhost:8000
-```
-
-Restart Vite after changing this value. The variable is embedded at build time;
-it must not contain secrets.
+The default Vite proxy keeps the UI and API on the same browser origin. If using
+`VITE_API_BASE` for a separate backend, configure exact `CORS_ALLOWED_ORIGINS` and
+`CSRF_TRUSTED_ORIGINS` on Django (comma-separated full UI origins), include
+credentials, and use the same hostname for local services. Cross-site hosting
+needs an explicit cookie/HTTPS deployment configuration; the defaults are for the
+same-origin local proxy. Restart services after changing configuration.
 
 ### Record sample activity
 
+With the backend environment active:
+
 ```bash
-curl -X POST http://localhost:8000/login-attempt \
-  -H 'Content-Type: application/json' \
-  -d '{"ip":"192.168.1.1","username":"admin","success":false}'
+python backend/manage.py seed_demo --scenario brute-force --ip 203.0.113.50
 ```
 
-Repeat the request six times within five minutes to trigger the brute-force rule.
-The Events tab shows all login events; the Suspicious tab shows flagged events.
-The stat cards count events, including suspicious events (not distinct IPs).
+This trusted local operator command appends synthetic activity. Network ingestion
+at `/login-attempt` requires an administrator session and a CSRF token. It is not
+an unauthenticated collector endpoint. The stat cards count events, including
+suspicious events (not distinct IPs).
 
 ## Detection and API
 
@@ -99,7 +104,8 @@ This repository contains the backend and frontend only. Docker/Compose,
 nginx configuration, an attack simulator, and GitHub Actions are not included.
 
 The backend settings are for local development: DEBUG is enabled, the secret key
-is a development value, CORS allows all origins, and the API has no authentication.
+is a development value, cookies are configured for local HTTP, and SQLite is the database.
+Authentication now uses Django sessions with CSRF checks and explicit workspace roles.
 Production deployment and dependency maintenance are separate work. The API trusts
 the submitted IP field; it is a simulator for reported events, not an authentication
 service. SQLite and synchronous detection suit a small local demo. Events are
@@ -115,7 +121,8 @@ currently run in the browser over the complete API response.
 The Investigations workspace captures detection evidence and supports case ownership,
 notes, New → Investigating → Resolved status changes, dispositions, closure reasons,
 and reopening. Case URLs use `#investigations/<id>`. Author and owner labels are
-self-reported local demo metadata; authentication and permissions are future work.
+authenticated account identities for new records. Older self-reported labels are
+preserved and marked as legacy; migration does not pretend they are verified users.
 
 Detection findings retain the original rule version, threshold, count, time window,
 and matching event snapshots. One finding is created per IP/rule cooldown (five
@@ -143,14 +150,43 @@ its previous decision in history.
 | GET/PATCH | `/investigations/<id>` | Read a case or change metadata/status |
 | POST | `/investigations/<id>/notes` | Append an analyst note |
 
-Case creation requires `finding_id` and `actor`; duplicate creation returns the
-existing case. Updates require `actor` and the current `revision`; stale edits
+Case creation requires `finding_id`; duplicate creation returns the
+existing case. Updates require the current `revision`; stale edits
 return HTTP 409. Resolving requires `status: "resolved"`, `disposition` (one of
 `true_positive`, `false_positive`, `benign`), and `closure_reason`. Note creation
-requires `actor` and `text`. Queue filters support `status`, `severity`, `source`,
+requires `text`. Actors/authors are taken from the authenticated session; supplied
+identity fields are rejected. Assignment uses `owner_user` (an active analyst/admin
+account ID, or null to unassign). Queue filters support `status`, `severity`, `source`,
 and exact `owner`. API lists remain unpaginated. Deletion and history-editing
 endpoints are not provided.
 
-The next milestone is trusted identities, permissions, and server-side event
-queries/pagination. See [the development roadmap](docs/ROADMAP.md)
+The next milestone is server-side event queries/pagination. See [the development roadmap](docs/ROADMAP.md)
 for the proposed data model, delivery order, and later deployment work.
+
+## Accounts and permissions
+
+| Role | Read events, findings, cases | Change cases / add notes | Manage accounts / ingest via API |
+| --- | --- | --- | --- |
+| Viewer | Yes | No | No |
+| Analyst | Yes | Yes | No |
+| Administrator | Yes | Yes | Yes |
+
+Permissions are enforced on the backend, including existing sessions after a role
+change or deactivation. At least one active administrator must remain. All roles
+share this single workspace; organization/tenant isolation is not implemented.
+Administrators correspond to Django staff/superuser accounts; Analysts and Viewers
+use the matching Django groups created by migration.
+
+`GET /auth/session` returns the current user (or null) and a CSRF token. Send this
+token in `X-CSRFToken` alongside the cookie jar for `POST /auth/login` (username,
+password). Login rotates the token and returns its replacement. `POST /auth/logout`
+also requires the token. Cookies are HttpOnly; passwords and session tokens are not
+saved in browser storage. Session lifetime is 12 hours. `/users/assignable` lists
+active analysts/admins. Administrators use `GET/POST /users`, `PATCH /users/<id>`
+(role / is_active), and `GET /users/access-history` (latest 100 entries). Account
+changes are audited without recording passwords.
+
+Sign-in is limited to 10 attempts per minute per remote IP using process-local
+cache. Shared, proxy-aware abuse protection, email recovery/verification, MFA,
+HTTPS cookies, supported dependencies, and production settings remain deployment
+work. Keep this demo local until those requirements are addressed.

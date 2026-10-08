@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 # Create your models here.
 class LoginEvent(models.Model):
@@ -70,6 +71,7 @@ class Investigation(models.Model):
     severity = models.CharField(max_length=10, choices=SEVERITIES)
     status = models.CharField(max_length=20, choices=STATUSES, default='new')
     owner = models.CharField(max_length=150, blank=True)
+    owner_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='assigned_investigations')
     disposition = models.CharField(max_length=20, choices=DISPOSITIONS, blank=True)
     closure_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -83,6 +85,7 @@ class Investigation(models.Model):
 
 class InvestigationNote(models.Model):
     investigation = models.ForeignKey(Investigation, on_delete=models.PROTECT, related_name='notes')
+    author_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='investigation_notes')
     author = models.CharField(max_length=150)
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -93,6 +96,7 @@ class InvestigationNote(models.Model):
 
 class AuditEntry(models.Model):
     investigation = models.ForeignKey(Investigation, on_delete=models.PROTECT, related_name='history')
+    actor_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='investigation_audit_entries')
     actor = models.CharField(max_length=150)
     action = models.CharField(max_length=30)
     before = models.JSONField(default=dict)
@@ -101,3 +105,15 @@ class AuditEntry(models.Model):
 
     class Meta:
         ordering = ['created_at', 'id']
+
+
+class AccessAuditEntry(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='access_changes')
+    target = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='access_history')
+    action = models.CharField(max_length=30)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
