@@ -1,6 +1,7 @@
 from django.db import transaction
-from .models import LoginEvent
+
 from .detection import record_findings
+from .models import LoginEvent
 
 
 @transaction.atomic

@@ -1,5 +1,6 @@
 import json
 from math import ceil
+
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
@@ -16,8 +17,9 @@ from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
-from rest_framework.views import APIView
 from rest_framework.validators import UniqueValidator
+from rest_framework.views import APIView
+
 from .models import AccessAuditEntry
 from .permissions import AdminPermission, role_for
 

@@ -2,12 +2,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
+
 from .accounts import set_role
-from .models import AccessAuditEntry, AuditEntry, Investigation, InvestigationNote
+from .models import AccessAuditEntry, AuditEntry, InvestigationNote
 from .services import ingest_login
 
 User = get_user_model()
-PASSWORD = 'Testing-workspace-9!Long'
+PASSWORD = 'Testing-workspace-9!Long'  # noqa: S105 -- Disposable test fixture, not a credential.
 
 
 class AccessTests(TestCase):

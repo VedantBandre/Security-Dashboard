@@ -89,8 +89,21 @@ source, or owner. The source-history action opens the event explorer with an exa
 - Login throttling for the local demo and real-cookie permission/CSRF tests.
 - Legacy records retained without attributing unverified labels to real accounts.
 
-This is a single shared workspace. Production dependency upgrades, HTTPS configuration,
+This is a single shared workspace. HTTPS configuration,
 shared abuse protection, recovery, and MFA remain separate deployment work.
+
+## Delivered: continuous quality and dependency security
+
+- PR/push CI on Python 3.12/3.14 and Node 22/24: tests, lint, build,
+  configuration checks, and fresh migrations with migration-drift detection.
+- Python security lint rules and runtime/development dependency audits.
+- Supported Django 5.2 LTS plus patched backend/frontend dependencies.
+- Weekly audit runs and Dependabot update PRs for Python, npm, and Actions.
+- Read-only workflow permissions, commit-pinned Actions, and no deployment secrets.
+
+Requiring passing checks before merge needs a GitHub ruleset. Public hosting,
+real-browser integration tests, secret provisioning, and production settings remain
+separate work; these checks do not establish production security.
 
 ## Next milestone: larger datasets
 
@@ -111,7 +124,7 @@ WebSockets. Add background processing only when measured ingestion load needs it
 - Additional event sources with a defined ingestion schema and trusted source identity.
 - IP/entity enrichment with provider provenance and explicit unavailable states.
 - Notifications linked to actionable findings, with deduplication.
-- Production settings, supported dependencies, secret management, request limits,
+- Production settings, secret management, request limits,
   backups, structured logs, and health monitoring before public hosting.
 - A simulated containment action with a visible demo label and an audit entry.
   Real containment requires an integration that actually enforces the action.

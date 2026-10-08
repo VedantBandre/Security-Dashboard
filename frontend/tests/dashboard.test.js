@@ -320,3 +320,15 @@ test('administrators provision accounts and update access with audited refreshes
     await waitFor(() => app.document.querySelector('[aria-label="Role for new-analyst"]').closest('tr').textContent.includes('Inactive'));
     assert.match(app.document.body.textContent, /admin · created · new-analyst/);
 });
+
+test('untrusted event fields render as text without injecting markup', async t => {
+    const attacker = '<img src=x onerror="window.injected=true">';
+    const app = mount(t, url => url.endsWith('/stats') ? success(url) : { ok: true, json: async () => [{ ...event, username: attacker }] });
+    await waitFor(() => app.document.querySelector('tbody tr'));
+    assert.ok(app.document.querySelector('tbody').textContent.includes(attacker));
+    assert.equal(app.document.querySelector('tbody img'), null);
+    app.document.querySelector('[aria-label="Inspect event 1"]').click();
+    await waitFor(() => app.document.querySelector('dialog[open]'));
+    assert.equal(app.document.querySelector('dialog img'), null);
+    assert.equal(app.window.injected, undefined);
+});

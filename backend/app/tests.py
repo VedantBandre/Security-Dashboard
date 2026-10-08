@@ -1,14 +1,12 @@
-from ipaddress import ip_address
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from datetime import timedelta
-from unittest.mock import patch
 
-from .models import LoginEvent
-from .detection import is_suspicious, BRUTE_FORCE_THRESHOLD, BRUTE_FORCE_WINDOW_MINUTES
-
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
+
+from .detection import BRUTE_FORCE_THRESHOLD, BRUTE_FORCE_WINDOW_MINUTES, is_suspicious
+from .models import LoginEvent
 
 # Create your tests here.
 

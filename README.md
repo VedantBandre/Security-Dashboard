@@ -6,7 +6,7 @@ rules, and displays events and counts with five-second polling.
 
 ## Run locally
 
-Prerequisites: Python 3.12 with venv support and Node.js 24.15+ (24.x), or 22.22.2+ (22.x) with npm.
+Prerequisites: Python 3.12 or 3.14 with venv support and Node.js 24.15+ (24.x), or 22.22.2+ (22.x) with npm.
 Run the backend and frontend in separate terminals from the repository root.
 
 ### Backend
@@ -101,12 +101,14 @@ proxy for the API paths on the hosting server.
 ## Scope and limitations
 
 This repository contains the backend and frontend only. Docker/Compose,
-nginx configuration, an attack simulator, and GitHub Actions are not included.
+nginx configuration, and an attack simulator are not included. GitHub Actions
+runs automated quality and dependency-security checks.
 
 The backend settings are for local development: DEBUG is enabled, the secret key
 is a development value, cookies are configured for local HTTP, and SQLite is the database.
 Authentication now uses Django sessions with CSRF checks and explicit workspace roles.
-Production deployment and dependency maintenance are separate work. The API trusts
+Production deployment remains separate work; supported dependencies and automated
+vulnerability checks are now included. The API trusts
 the submitted IP field; it is a simulator for reported events, not an authentication
 service. SQLite and synchronous detection suit a small local demo. Events are
 unpaginated, and the UI polls rather than receiving pushed updates.
@@ -188,5 +190,49 @@ changes are audited without recording passwords.
 
 Sign-in is limited to 10 attempts per minute per remote IP using process-local
 cache. Shared, proxy-aware abuse protection, email recovery/verification, MFA,
-HTTPS cookies, supported dependencies, and production settings remain deployment
+HTTPS cookies, and production settings remain deployment
 work. Keep this demo local until those requirements are addressed.
+
+## Automated quality and security checks
+
+GitHub Actions runs on pushes, pull requests, manual requests, and a weekly schedule:
+
+- Backend tests on Python 3.12 and 3.14, configuration checks, fresh database
+  migrations, and detection of model changes missing a migration.
+- Ruff checks Python imports, unused code, syntax issues, and security rules.
+- Frontend ESLint, production build, and built-application tests on Node 22 and 24.
+- `pip-audit` scans Python runtime/development dependencies; `npm audit` scans
+  the complete frontend lockfile and fails for any reported severity.
+
+Dependabot proposes weekly Python, npm, and GitHub Actions updates. Workflow
+permissions are read-only, checkout credentials are not persisted, and third-party
+Actions are pinned to verified commit hashes. No deployment or repository secrets
+are required. Audit findings and audit service failures fail the job.
+
+Install developer checks and run them locally:
+
+```bash
+python -m pip install -r backend/requirements-dev.txt
+ruff check backend
+python backend/manage.py check
+python backend/manage.py makemigrations --check --dry-run
+python backend/manage.py test app --verbosity=2
+pip-audit -r backend/requirements-dev.txt
+npm --prefix frontend ci
+npm --prefix frontend run lint
+npm --prefix frontend test
+npm --prefix frontend audit --audit-level=low
+```
+
+To enforce checks before merging, configure a GitHub ruleset for `main` requiring
+**Backend / Python 3.12**, **Backend / Python 3.14**, **Frontend / Node 22**,
+**Frontend / Node 24**, and **Dependency security** after the workflow has run.
+The workflow reports failures; requiring them is a repository setting.
+
+Backend tests use isolated test databases, not the local demo database. Frontend
+tests exercise the production bundle in JSDOM with controlled API responses;
+they do not replace a real-browser integration or visual review. Static analysis
+and known-vulnerability scans reduce risk but do not certify the app for public
+hosting. The publicly known development secret is narrowly exempted from Ruff;
+test fixture passwords are also exempted. Production secrets, HTTPS, shared
+abuse protection, and deployment settings remain a separate milestone.

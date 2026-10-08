@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - name: Python lint and security rules
+        run: ruff check backend
+      - name: Django configuration and migration drift
+        run: |
+          python backend/manage.py check
+          python backend/manage.py makemigrations --check --dry-run
+      - name: Apply migrations to a fresh database
+        run: python backend/manage.py migrate --noinput
+      - name: Backend tests including authentication and permissions
+        run: python backend/manage.py test app --verbosity=2
+
+  frontend:
+    name: Frontend / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: JavaScript and React lint
+        run: npm run lint
+      - name: Production build and built application tests
+        run: npm test
+
+  dependencies:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - name: Audit Python runtime and development dependencies
+        run: pip-audit -r backend/requirements-dev.txt
+      - name: Audit frontend runtime and development dependencies
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=low

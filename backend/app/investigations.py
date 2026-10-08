@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
@@ -5,10 +6,10 @@ from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from .accounts import StrictInput
+from .models import AuditEntry, DetectionFinding, Investigation, InvestigationNote
 from .permissions import role_for
-from django.contrib.auth import get_user_model
-from .models import DetectionFinding, Investigation, InvestigationNote, AuditEntry
 
 
 class FindingSummarySerializer(serializers.ModelSerializer):
