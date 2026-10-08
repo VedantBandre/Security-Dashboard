@@ -1,5 +1,7 @@
 from ipaddress import ip_address
+
 from django.core.management.base import BaseCommand, CommandError
+
 from app.models import DetectionFinding
 from app.services import ingest_login
 

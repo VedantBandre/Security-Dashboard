@@ -1,5 +1,22 @@
 from django.urls import path
-from .views import LoginAttemptView, EventListView, SuspiciousEventsView, StatsView
+
+from .accounts import (
+    AccessHistoryView,
+    AssignableUsersView,
+    UsersView,
+    UserView,
+    login_view,
+    logout_view,
+    session_view,
+)
+from .investigations import (
+    FindingsView,
+    FindingView,
+    InvestigationsView,
+    InvestigationView,
+    NotesView,
+)
+from .views import EventListView, LoginAttemptView, StatsView, SuspiciousEventsView
 
 urlpatterns = [
     path('login-attempt', LoginAttemptView.as_view(), name='login-attempt'),
@@ -7,7 +24,6 @@ urlpatterns = [
     path('suspicious', SuspiciousEventsView.as_view(), name='suspicious'),
     path('stats', StatsView.as_view(), name='stats'),
 ]
-from .investigations import FindingsView, FindingView, InvestigationsView, InvestigationView, NotesView
 
 urlpatterns += [
     path('findings', FindingsView.as_view(), name='findings'),
@@ -17,8 +33,6 @@ urlpatterns += [
     path('investigations/<int:pk>/notes', NotesView.as_view(), name='investigation-notes'),
 ]
 
-
-from .accounts import session_view, login_view, logout_view, AssignableUsersView, UsersView, UserView, AccessHistoryView
 urlpatterns += [
     path('auth/session', session_view, name='auth-session'),
     path('auth/login', login_view, name='auth-login'),

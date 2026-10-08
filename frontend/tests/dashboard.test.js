@@ -257,6 +257,8 @@ test('sign-in gates data, sends CSRF, and sign-out removes the workspace', async
     app.click('Sign out');
     await waitFor(() => app.document.querySelector('[name="password"]'));
     assert.equal(app.document.querySelector('tbody'), null);
+    // React commits the sign-in screen before running passive effect cleanup.
+    await waitFor(() => app.intervals.size === 0);
     assert.equal(app.intervals.size, 0);
 });
 
@@ -272,6 +274,8 @@ test('session expiry clears event data and returns to sign-in', async t => {
     app.click('Refresh');
     await waitFor(() => app.document.querySelector('[name="password"]'));
     assert.equal(app.document.querySelector('tbody'), null);
+    // React commits the sign-in screen before running passive effect cleanup.
+    await waitFor(() => app.intervals.size === 0);
     assert.equal(app.intervals.size, 0);
 });
 
@@ -319,4 +323,16 @@ test('administrators provision accounts and update access with audited refreshes
     row.querySelector('button').click();
     await waitFor(() => app.document.querySelector('[aria-label="Role for new-analyst"]').closest('tr').textContent.includes('Inactive'));
     assert.match(app.document.body.textContent, /admin · created · new-analyst/);
+});
+
+test('untrusted event fields render as text without injecting markup', async t => {
+    const attacker = '<img src=x onerror="window.injected=true">';
+    const app = mount(t, url => url.endsWith('/stats') ? success(url) : { ok: true, json: async () => [{ ...event, username: attacker }] });
+    await waitFor(() => app.document.querySelector('tbody tr'));
+    assert.ok(app.document.querySelector('tbody').textContent.includes(attacker));
+    assert.equal(app.document.querySelector('tbody img'), null);
+    app.document.querySelector('[aria-label="Inspect event 1"]').click();
+    await waitFor(() => app.document.querySelector('dialog[open]'));
+    assert.equal(app.document.querySelector('dialog img'), null);
+    assert.equal(app.window.injected, undefined);
 });

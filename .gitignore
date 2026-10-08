@@ -72,3 +72,6 @@ htmlcov/
 # =========================
 *.bak
 *.tmp
+
+# Python lint cache
+.ruff_cache/

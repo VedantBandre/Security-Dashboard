@@ -1,5 +1,7 @@
 from rest_framework import serializers
+
 from .models import LoginEvent
+
 
 class LoginEventSerializer(serializers.ModelSerializer):
     class Meta:
