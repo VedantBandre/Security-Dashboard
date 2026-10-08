@@ -29,3 +29,20 @@ export async function postLoginAttempt(payload) {
     if (!res.ok) throw new Error('Failed to post login attempt');
     return res.json();
 }
+async function workflowRequest(path, options) {
+    const res = await fetch(`${BASE}${path}`, options);
+    const data = await res.json();
+    if (!res.ok) {
+        const messages = Object.entries(data).map(([field, value]) => `${field === 'detail' ? '' : `${field}: `}${Array.isArray(value) ? value.join(' ') : value}`).join(' ');
+        throw new Error(messages || 'The request could not be completed.');
+    }
+    return data;
+}
+const jsonOptions = (method, data) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+export const fetchFindings = () => workflowRequest('/findings');
+export const fetchFinding = id => workflowRequest(`/findings/${id}`);
+export const fetchInvestigations = () => workflowRequest('/investigations');
+export const fetchInvestigation = id => workflowRequest(`/investigations/${id}`);
+export const createInvestigation = data => workflowRequest('/investigations', jsonOptions('POST', data));
+export const updateInvestigation = (id, data) => workflowRequest(`/investigations/${id}`, jsonOptions('PATCH', data));
+export const addInvestigationNote = (id, data) => workflowRequest(`/investigations/${id}/notes`, jsonOptions('POST', data));

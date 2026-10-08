@@ -112,6 +112,45 @@ source IPs, search, outcome/detection/time filters, 25-row pages, event details,
 source-IP drilldown, and CSV export of the filtered results. Filters and pagination
 currently run in the browser over the complete API response.
 
-The next milestone is persistent investigations with rule evidence, ownership,
-notes, status changes, and recorded outcomes. See [the development roadmap](docs/ROADMAP.md)
+The Investigations workspace captures detection evidence and supports case ownership,
+notes, New → Investigating → Resolved status changes, dispositions, closure reasons,
+and reopening. Case URLs use `#investigations/<id>`. Author and owner labels are
+self-reported local demo metadata; authentication and permissions are future work.
+
+Detection findings retain the original rule version, threshold, count, time window,
+and matching event snapshots. One finding is created per IP/rule cooldown (five
+minutes for brute-force; one minute for rate abuse). Later matching activity can
+create another finding after the cooldown. Existing event flags are retained;
+old flags are not converted into findings without new detection evidence.
+
+Create synthetic activity from the repository root with the backend environment active:
+
+```bash
+python backend/manage.py migrate
+python backend/manage.py seed_demo --scenario brute-force --ip 203.0.113.50
+# Other scenarios: normal, rate-abuse. Re-running appends events; it does not reset data.
+```
+
+Open Investigations → Findings, review a finding, and open its investigation.
+Assign an analyst, start investigating, add notes, and resolve with a disposition
+and closure reason. Reopen a resolved case to continue working while preserving
+its previous decision in history.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/findings`, `/findings/<id>` | Finding summaries and frozen evidence |
+| GET/POST | `/investigations` | Filter the queue or create a case from a finding |
+| GET/PATCH | `/investigations/<id>` | Read a case or change metadata/status |
+| POST | `/investigations/<id>/notes` | Append an analyst note |
+
+Case creation requires `finding_id` and `actor`; duplicate creation returns the
+existing case. Updates require `actor` and the current `revision`; stale edits
+return HTTP 409. Resolving requires `status: "resolved"`, `disposition` (one of
+`true_positive`, `false_positive`, `benign`), and `closure_reason`. Note creation
+requires `actor` and `text`. Queue filters support `status`, `severity`, `source`,
+and exact `owner`. API lists remain unpaginated. Deletion and history-editing
+endpoints are not provided.
+
+The next milestone is trusted identities, permissions, and server-side event
+queries/pagination. See [the development roadmap](docs/ROADMAP.md)
 for the proposed data model, delivery order, and later deployment work.

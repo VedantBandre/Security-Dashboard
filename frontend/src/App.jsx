@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Dashboard from './pages/Dashboard';
 import SuspiciousPage from './pages/SuspiciousPage';
 import Icon from './components/Icon';
+import InvestigationsPage from './pages/InvestigationsPage';
 import './App.css';
 
 function initialTheme() {
@@ -12,9 +13,21 @@ function initialTheme() {
   return 'light';
 }
 
+function pageFromHash() {
+  return location.hash.startsWith('#investigations') ? 'investigations' : location.hash.startsWith('#suspicious') ? 'suspicious' : 'dashboard';
+}
+
 export default function App() {
-  const [page, setPage] = useState('dashboard');
+  const [page, setPage] = useState(pageFromHash);
+  function navigate(nextPage) { setPage(nextPage); window.history.pushState(null, '', nextPage === 'dashboard' ? '#events' : `#${nextPage}`); window.dispatchEvent(new PopStateEvent('popstate')); }
   const [theme, setTheme] = useState(initialTheme);
+
+  useEffect(() => {
+    const sync = () => setPage(pageFromHash());
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => { window.removeEventListener('hashchange', sync); window.removeEventListener('popstate', sync); };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -27,17 +40,18 @@ export default function App() {
         <div className="nav-brand"><span className="brand-mark"><Icon name="shield" size={23} /></span><div>Security Dashboard<span className="brand-caption">Operations workspace</span></div></div>
         <div className="workspace-label">Workspace</div>
         <nav className="nav-links" aria-label="Main navigation">
-          <button className={`nav-btn ${page === 'dashboard' ? 'active' : ''}`} aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="grid" />Events</button>
-          <button className={`nav-btn ${page === 'suspicious' ? 'active' : ''}`} aria-current={page === 'suspicious' ? 'page' : undefined} onClick={() => setPage('suspicious')}><Icon name="alert" />Suspicious</button>
+          <button className={`nav-btn ${page === 'dashboard' ? 'active' : ''}`} aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => navigate('dashboard')}><Icon name="grid" />Events</button>
+          <button className={`nav-btn ${page === 'suspicious' ? 'active' : ''}`} aria-current={page === 'suspicious' ? 'page' : undefined} onClick={() => navigate('suspicious')}><Icon name="alert" />Suspicious</button>
+          <button className={`nav-btn ${page === 'investigations' ? 'active' : ''}`} aria-current={page === 'investigations' ? 'page' : undefined} onClick={() => navigate('investigations')}><Icon name="shield" />Investigations</button>
         </nav>
         <div className="sidebar-footer"><span className="environment-dot" />Local workspace<span className="sidebar-note">Authentication monitoring</span></div>
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <div className="breadcrumb">Security operations <span>/</span> <strong>{page === 'dashboard' ? 'Events' : 'Suspicious activity'}</strong></div>
+          <div className="breadcrumb">Security operations <span>/</span> <strong>{page === 'dashboard' ? 'Events' : page === 'investigations' ? 'Investigations' : 'Suspicious activity'}</strong></div>
           <button className="btn theme-toggle" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}><Icon name={theme === 'light' ? 'moon' : 'sun'} />{theme === 'light' ? 'Dark mode' : 'Light mode'}</button>
         </header>
-        <main className="main">{page === 'dashboard' ? <Dashboard /> : <SuspiciousPage />}</main>
+        <main className="main">{page === 'dashboard' ? <Dashboard /> : page === 'investigations' ? <InvestigationsPage /> : <SuspiciousPage />}</main>
       </div>
     </div>
   );
