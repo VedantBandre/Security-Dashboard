@@ -45,7 +45,7 @@ class LoginThrottle(SimpleRateThrottle):
     rate = '10/min'
 
     def get_cache_key(self, request, view):
-        return self.cache_format % {'scope': self.scope, 'ident': request.META.get('REMOTE_ADDR', '')}
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
 
 
 def csrf_failure(request, reason=''):
