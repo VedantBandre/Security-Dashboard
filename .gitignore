@@ -75,3 +75,5 @@ htmlcov/
 
 # Python lint cache
 .ruff_cache/
+
+!deployment.env.example

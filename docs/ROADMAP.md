@@ -105,6 +105,18 @@ Requiring passing checks before merge needs a GitHub ruleset. Public hosting,
 real-browser integration tests, secret provisioning, and production settings remain
 separate work; these checks do not establish production security.
 
+## Delivered: portfolio deployment foundation
+
+- Production settings require a private secret, explicit hosts, and PostgreSQL.
+- Secure cookies, HTTPS redirects, host validation, and opt-in trusted-proxy handling.
+- Shared database cache for login throttling across web workers; ingress limits still needed.
+- One-origin non-root container with Gunicorn and the built React frontend.
+- Minimal database health endpoint and deployment configuration tests.
+- Release, demo Viewer provisioning, proxy, backup, and monitoring instructions.
+
+See [the deployment guide](DEPLOYMENT.md). Actual hosting, TLS, backups, monitoring,
+and public Viewer credentials are operator setup; the repository does not provision them.
+
 ## Next milestone: larger datasets
 
 - Server-side search, time filters, ordering, and pagination. Define whether

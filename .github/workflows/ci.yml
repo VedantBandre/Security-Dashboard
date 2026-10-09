@@ -92,3 +92,82 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm audit --audit-level=low
+
+  postgresql:
+    name: Backend / PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: security_dashboard
+          POSTGRES_USER: security_dashboard
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U security_dashboard"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_ENGINE: postgresql
+      DB_NAME: security_dashboard
+      DB_USER: security_dashboard
+      DB_PASSWORD: ci-only-password
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_SSLMODE: disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: python backend/manage.py migrate --noinput
+      - run: python backend/manage.py test app --verbosity=2
+
+  portfolio:
+    name: Portfolio container
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: security_dashboard
+          POSTGRES_USER: security_dashboard
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U security_dashboard"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Build production container
+        run: docker build --tag security-dashboard:ci .
+      - name: Validate and launch production deployment
+        run: |
+          secret=$(openssl rand -base64 64 | tr -d '\n')
+          printf '%s\n' "DJANGO_ENV=production" "DJANGO_SECRET_KEY=$secret" \
+            "DJANGO_ALLOWED_HOSTS=demo.example.com" "DJANGO_TRUST_PROXY=true" \
+            "DB_NAME=security_dashboard" "DB_USER=security_dashboard" \
+            "DB_PASSWORD=ci-only-password" "DB_HOST=127.0.0.1" \
+            "DB_SSLMODE=disable" > "$RUNNER_TEMP/portfolio.env"
+          chmod 600 "$RUNNER_TEMP/portfolio.env"
+          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py migrate --noinput
+          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py createcachetable
+          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py check --deploy --fail-level ERROR
+          docker run --detach --name portfolio --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci
+      - name: Check assembled application
+        run: |
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 \
+            -H 'Host: demo.example.com' -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/health/
+          python3 scripts/check_portfolio.py http://127.0.0.1:8000 demo.example.com
+      - name: Container logs
+        if: always()
+        run: docker logs portfolio

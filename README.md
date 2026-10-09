@@ -20,6 +20,7 @@ Security Dashboard is a local SOC demo built with **React, Vite, Django REST Fra
 - [Roles and access](#roles-and-access)
 - [Detection behavior](#detection-behavior)
 - [Architecture and API](#architecture-and-api)
+- [Portfolio hosting](#portfolio-hosting)
 - [Development and CI](#development-and-ci)
 - [Troubleshooting](#troubleshooting)
 - [Scope and next steps](#scope-and-next-steps)
@@ -217,7 +218,7 @@ Use **Dark mode** or **Light mode** at the top right, including on the sign-in s
 
 Permissions are enforced by the backend, including after account changes affect an existing session. All accounts share one workspace; organization and tenant isolation are not implemented. Older self-reported attribution is marked **Legacy label** rather than being treated as a verified account identity.
 
-Authentication uses Django sessions, HttpOnly session cookies, and CSRF protection. Sessions last 12 hours. Passwords and session tokens are not saved in browser local storage. Sign-in is limited to 10 attempts per minute per remote IP using a process-local cache.
+Authentication uses Django sessions, HttpOnly session cookies, and CSRF protection. Sessions last 12 hours. Passwords and session tokens are not saved in browser local storage. Sign-in is limited to 10 attempts per minute per client identity. Development uses a process-local cache; production uses shared database-cache storage and requires deliberate proxy configuration.
 
 ## Detection behavior
 
@@ -279,6 +280,19 @@ For a separate API origin, set `VITE_API_BASE` before starting/building the fron
 
 </details>
 
+## Portfolio hosting
+
+The repository includes a single-origin production container: Gunicorn serves the
+Django API and built React workspace behind an HTTPS ingress, with PostgreSQL
+persistence. Production settings require a private secret and explicit hosts,
+enforce secure cookies and HTTPS, and share login throttle state through a database
+cache. `/health/` reports database readiness without exposing connection details.
+
+See [the deployment guide](docs/DEPLOYMENT.md) for environment settings, container
+build and release commands, proxy requirements, backup guidance, and a read-only
+Viewer account for portfolio visitors. Local development still defaults to SQLite
+and HTTP. Hosting infrastructure and TLS must be configured before public sharing.
+
 ## Development and CI
 
 With the backend environment active, run from the repository root:
@@ -312,6 +326,8 @@ Output goes to `frontend/dist`. Preview also uses the local API proxy, so keep D
 | --- | --- |
 | Backend / Python 3.12 and 3.14 | Ruff including security rules, configuration, fresh migrations, migration drift, backend tests |
 | Frontend / Node 22 and 24 | ESLint, production build, built-application tests |
+| Backend / PostgreSQL | Fresh migrations and backend tests against PostgreSQL 17 |
+| Portfolio container | Build the production image, apply PostgreSQL migrations, and smoke-test the assembled app |
 | Dependency security | `pip-audit` and `npm audit`, including development dependencies |
 
 [Dependabot](.github/dependabot.yml) proposes weekly Python, npm, and GitHub Actions updates. Actions are pinned to commit hashes; workflow permissions are read-only and checkout credentials are not persisted. Dependency findings and audit-service failures fail the security job.
@@ -323,6 +339,8 @@ To make passing CI a merge requirement, create or edit a GitHub ruleset targetin
 - **Frontend / Node 22**
 - **Frontend / Node 24**
 - **Dependency security**
+- **Backend / PostgreSQL**
+- **Portfolio container**
 
 Requiring checks is a repository setting, separate from the workflow file. Backend tests use isolated test databases. Frontend tests use JSDOM with controlled API responses; they complement real-browser review.
 
@@ -342,8 +360,8 @@ Requiring checks is a repository setting, separate from the workflow file. Backe
 
 ## Scope and next steps
 
-The default settings enable DEBUG, use a publicly known development secret, configure cookies for local HTTP, and use SQLite. Detection is synchronous, API lists are unpaginated, and monitoring polls. This project does not include Docker/Compose, nginx configuration, an external attack simulator, real authentication enforcement, or automatic containment.
+The default settings enable DEBUG, use a publicly known development secret, configure cookies for local HTTP, and use SQLite. Detection is synchronous, API lists are unpaginated, and monitoring polls. A production Dockerfile is included; Compose, nginx configuration, an external attack simulator, real authentication enforcement, and automatic containment are not included.
 
-Before public hosting, the deployment work needs production settings and secrets, HTTPS cookies, shared proxy-aware abuse protection, supported infrastructure, and backups and monitoring. Email recovery/verification and MFA are also future work. Automated checks reduce risk but do not certify production readiness.
+The production configuration and container are implemented. Public hosting still needs private runtime secrets, a correctly configured HTTPS ingress, infrastructure, backups, monitoring, and ingress abuse controls. Email recovery/verification and MFA are also future work. Automated checks reduce risk but do not certify production readiness.
 
-The next planned application milestone is **server-side event search and pagination**, followed by further deployment work. See the [development roadmap](docs/ROADMAP.md) for the proposed delivery order.
+The next portfolio milestone is hosting a populated read-only demo with the deployment foundation. **Server-side event search and pagination** remains the next application scaling milestone. See the [development roadmap](docs/ROADMAP.md) for the proposed delivery order.
