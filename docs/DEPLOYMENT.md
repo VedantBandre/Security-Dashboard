@@ -83,14 +83,19 @@ docker run --env-file /private/path/portfolio.env -p 127.0.0.1:8000:8000 securit
 Configure your platform's readiness probe to GET **`/health/`** with an allowed Host
 and the same trusted HTTPS forwarding as public requests. A successful response is
 `{"status":"ok"}`; unavailable database connectivity returns 503 without internal
-connection details. Plain HTTP probes are redirected by the HTTPS policy. Use an
-HTTPS probe or configure the internal probe to match the trusted ingress contract.
+connection details. The minimal `/health/` endpoint is exempt from HTTPS redirects so internal HTTP
+probes actually test the database. All authentication and workspace routes still
+redirect HTTP to HTTPS. Host validation applies to the probe too.
 
 For hosting without containers, build with `npm --prefix frontend ci` and
 `npm --prefix frontend run build`, install `backend/requirements.txt`, export the
 same environment, then run release commands plus `collectstatic --noinput`.
 From `backend/`, launch `gunicorn --config gunicorn.conf.py config.wsgi:application`.
 Keep the built `frontend/dist` alongside `backend` in the deployed directory.
+
+For a Render free web service with one-time synthetic dataset provisioning, see
+[the Render walkthrough](RENDER.md). The Blueprint leaves database creation out;
+supply PostgreSQL settings before deploying.
 
 ## Prepare the demo
 

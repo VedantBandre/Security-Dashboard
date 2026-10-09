@@ -288,6 +288,10 @@ persistence. Production settings require a private secret and explicit hosts,
 enforce secure cookies and HTTPS, and share login throttle state through a database
 cache. `/health/` reports database readiness without exposing connection details.
 
+For a Render free web service, use [the Render walkthrough](docs/RENDER.md) and
+[root Blueprint](render.yaml). The Blueprint creates no database; supply a
+dedicated PostgreSQL connection before deploying. Database setup is deferred.
+
 See [the deployment guide](docs/DEPLOYMENT.md) for environment settings, container
 build and release commands, proxy requirements, backup guidance, and a read-only
 Viewer account for portfolio visitors. Local development still defaults to SQLite

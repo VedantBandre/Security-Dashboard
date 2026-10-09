@@ -74,6 +74,7 @@ class DeploymentEndpointTests(TestCase):
         response = self.client.get('/auth/session', HTTP_HOST='demo.example.com')
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response['Location'], 'https://demo.example.com/auth/session')
+        self.assertEqual(self.client.get('/health/', HTTP_HOST='demo.example.com').status_code, 200)
         response = self.client.get('/auth/session', HTTP_HOST='demo.example.com', HTTP_X_FORWARDED_PROTO='https')
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.cookies['security_dashboard_csrf']['secure'])
