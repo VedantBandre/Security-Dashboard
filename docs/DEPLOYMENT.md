@@ -28,6 +28,7 @@ files automatically. Keep actual environment files and credentials out of Git.
 | `DJANGO_PROXY_COUNT` | Defaults to 0, so throttle identity uses the direct peer. Set to the exact trusted proxy count when your ingress supplies a sanitized `X-Forwarded-For` chain |
 | `DJANGO_HSTS_INCLUDE_SUBDOMAINS` | Defaults to false; enable only if all subdomains use HTTPS |
 | `PORT` | Gunicorn listening port, default 8000 |
+| `PORTFOLIO_MODE` | Defaults to false; set true only for the initialized synthetic workspace to enable public read-only demo entry |
 | `WEB_CONCURRENCY` | Gunicorn workers, default 2 |
 
 Generate a secret privately with `python -c "import secrets; print(secrets.token_urlsafe(64))"`

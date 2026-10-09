@@ -97,3 +97,16 @@ td { padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 11px
 .source-history-btn { margin-bottom: 18px; }
 .login-layout { min-height: 100vh; display: grid; place-items: center; padding: 35px 20px; }.login-card { width: min(100%, 420px); padding: 32px; }.login-card > .brand-mark { margin-bottom: 23px; }.login-card h1 { font-size: 24px; }.login-card > p { color: var(--muted); font-size: 12px; margin: 14px 0 25px; }.login-card .btn-primary { width: 100%; margin-top: 8px; }.login-card fieldset { border: 0; padding: 0; margin: 0; }.login-help { display: block; color: var(--muted); font-size: 10px; margin-top: 22px; }.login-toolbar { position: absolute; right: 24px; top: 20px; }.session-actions { display: flex; align-items: center; gap: 12px; }.session-identity { font-size: 11px; text-align: right; }.session-identity small { display: block; font-size: 9px; color: var(--muted); text-transform: capitalize; }.success-banner { background: var(--ok-soft); color: var(--ok); border-radius: 7px; padding: 12px 16px; font-size: 12px; margin-bottom: 20px; }.legacy-label { color: var(--muted); font-size: 9px; margin-left: 6px; }
 @media (max-width: 800px) { .session-identity { display: none; }.topbar { gap: 10px; flex-wrap: wrap; }.nav-links { flex-wrap: wrap; } }
+
+.demo-entry { margin-top: 22px; }
+.demo-entry p, .guide-description { color: var(--muted); font-size: 13px; }
+.login-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; margin: 24px 0 12px; }
+.login-divider::before, .login-divider::after { content: ''; height: 1px; background: var(--border); flex: 1; }
+.portfolio-guide { padding: 22px 24px; margin-bottom: 28px; }
+.guide-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.guide-description { margin-top: 12px; max-width: 850px; }
+.guide-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-left: 20px; margin: 20px 0 0; }
+.guide-steps li { padding-left: 4px; }
+.guide-steps li::marker { color: var(--accent); font-weight: 650; }
+.guide-steps p { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }
+@media (max-width: 800px) { .guide-steps { grid-template-columns: 1fr; gap: 16px; } .portfolio-guide { padding: 18px; } }

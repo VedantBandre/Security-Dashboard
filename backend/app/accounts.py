@@ -1,6 +1,7 @@
 import json
 from math import ceil
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
@@ -20,7 +21,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.validators import UniqueValidator
 from rest_framework.views import APIView
 
-from .models import AccessAuditEntry
+from .models import AccessAuditEntry, DemoDataset
 from .permissions import AdminPermission, role_for
 
 User = get_user_model()
@@ -52,11 +53,46 @@ def csrf_failure(request, reason=''):
     return JsonResponse({'detail': 'Security check failed. Reload the page and try again.', 'code': 'csrf_failed'}, status=403)
 
 
+def portfolio_access():
+    if not settings.PORTFOLIO_MODE:
+        return None, None
+    dataset = DemoDataset.objects.filter(key='portfolio-v1').first()
+    viewer = User.objects.filter(username='portfolio-viewer', is_active=True).first() if dataset else None
+    if role_for(viewer) != 'viewer':
+        viewer = None
+    return viewer, {'available': viewer is not None, 'initialized_at': dataset.created_at.isoformat() if dataset else None}
+
+
+def session_data(request):
+    _, demo = portfolio_access()
+    user = request.user
+    return {'user': user_data(user) if user.is_authenticated and user.is_active else None, 'csrf_token': get_token(request), 'demo': demo}
+
+
+@never_cache
+@require_POST
+@csrf_protect
+def demo_login_view(request):
+    viewer, _ = portfolio_access()
+    if viewer is None:
+        return JsonResponse({'detail': 'Demo access is unavailable.'}, status=404)
+    # Never replace a signed-in analyst/admin session with the public guest account.
+    if request.user.is_authenticated:
+        return JsonResponse({'detail': 'Sign out before exploring the public demo.'}, status=409)
+    throttle = LoginThrottle()
+    if not throttle.allow_request(request, None):
+        response = JsonResponse({'detail': 'Too many sign-in attempts. Try again shortly.'}, status=429)
+        response['Retry-After'] = str(ceil(throttle.wait()))
+        return response
+    login(request, viewer, backend='django.contrib.auth.backends.ModelBackend')
+    request.session['portfolio_guest'] = True
+    return JsonResponse(session_data(request))
+
+
 @never_cache
 @require_GET
 def session_view(request):
-    user = request.user
-    return JsonResponse({'user': user_data(user) if user.is_authenticated and user.is_active else None, 'csrf_token': get_token(request)})
+    return JsonResponse(session_data(request))
 
 
 @never_cache
@@ -82,7 +118,8 @@ def login_view(request):
     if not role_for(user):
         return JsonResponse({'detail': 'This account has no workspace role. Contact an administrator.'}, status=403)
     login(request, user)
-    return JsonResponse({'user': user_data(user), 'csrf_token': get_token(request)})
+    request.session.pop('portfolio_guest', None)
+    return JsonResponse(session_data(request))
 
 
 @never_cache
@@ -90,7 +127,7 @@ def login_view(request):
 @csrf_protect
 def logout_view(request):
     logout(request)
-    return JsonResponse({'user': None, 'csrf_token': get_token(request)})
+    return JsonResponse(session_data(request))
 
 
 def set_role(user, role):
@@ -171,6 +208,8 @@ class UserView(APIView):
         before = access_snapshot(user)
         data = serializer.validated_data
         next_role = data.get('role', before['role'])
+        if settings.PORTFOLIO_MODE and user.username == 'portfolio-viewer' and next_role != 'viewer':
+            raise serializers.ValidationError({'role': 'The public demo account must remain a Viewer.'})
         next_active = data.get('is_active', user.is_active)
         if before['role'] == 'admin' and user.is_active and (next_role != 'admin' or not next_active):
             other_admin = User.objects.filter(is_active=True).filter(Q(is_staff=True) | Q(is_superuser=True)).exclude(pk=pk).exists()

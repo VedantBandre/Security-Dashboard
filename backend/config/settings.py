@@ -9,6 +9,8 @@ from .environment import boolean, csv, required
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+PORTFOLIO_MODE = boolean('PORTFOLIO_MODE')
+
 ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development')
 if ENVIRONMENT not in {'development', 'production'}:
     raise ImproperlyConfigured('DJANGO_ENV must be development or production.')
@@ -47,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'config.middleware.PortfolioGuestMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

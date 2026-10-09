@@ -24,14 +24,14 @@ Sources: [Render free-tier limits](https://render.com/docs/free) and
      PostgreSQL connection. TLS is required by default.
    - `DJANGO_SECRET_KEY`: a private random value of at least 50 characters.
    - `PORTFOLIO_ADMIN_PASSWORD`: a strong private password.
-   - `PORTFOLIO_VIEWER_PASSWORD`: a different strong password for public demo visitors.
+   - `PORTFOLIO_VIEWER_PASSWORD`: a different strong password for the fallback Viewer sign-in.
 5. Review the web service's **free** plan, then apply only after the database
    settings are available. Without them, production startup deliberately fails.
 6. Wait for the deploy to become live, then open its `onrender.com` URL.
 
 Generate private random values with `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
-Never share the secret key or administrator password. The Viewer password is
-intended to be shared with portfolio reviewers; it grants read-only workspace access.
+Never share the secret key or administrator password. Visitors use **Explore demo**
+without entering credentials; keep the fallback Viewer password private too.
 
 ## First startup and restarts
 
@@ -58,9 +58,18 @@ The `demo-analyst` attribution account has an unusable password and cannot sign 
 
 Passwords are stored as Django password hashes. Changing an environment variable
 later does not reset an existing password. Use the Accounts workflow or an operator
-`changepassword` command as appropriate. If you deactivate or change the public
-account's role, update the credentials shared with reviewers too. Never promote a
-publicly shared account to Analyst or Administrator.
+`changepassword` command as appropriate. The Blueprint sets `PORTFOLIO_MODE=true`,
+which enables **Explore demo** only after initialization and while `portfolio-viewer`
+is active with the Viewer role. Its role cannot be promoted through the account API
+in portfolio mode. Deactivating the account removes public access; disabling
+`PORTFOLIO_MODE` also ends existing public guest sessions on their next request.
+An out-of-band privilege change revokes those sessions rather than granting visitors
+write access. Normal private staff sign-in remains available.
+
+The public entry is CSRF-protected and shares the existing sign-in rate limit.
+The walkthrough labels the synthetic dataset, explains read-only access, and guides
+visitors through event details, detection evidence, and case decisions. Visitors
+can hide or reopen it; only that preference is saved in their browser.
 
 Synthetic timestamps reflect initialization time. This is a retained example
 workspace, not an external live monitoring feed. After 24 hours, the recent-activity
