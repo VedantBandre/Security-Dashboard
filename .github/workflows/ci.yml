@@ -157,10 +157,11 @@ jobs:
             "DJANGO_ALLOWED_HOSTS=demo.example.com" "DJANGO_TRUST_PROXY=true" \
             "DB_NAME=security_dashboard" "DB_USER=security_dashboard" \
             "DB_PASSWORD=ci-only-password" "DB_HOST=127.0.0.1" \
-            "DB_SSLMODE=disable" > "$RUNNER_TEMP/portfolio.env"
+            "DB_SSLMODE=disable" "PORTFOLIO_PROVISION=true" \
+            "PORTFOLIO_ADMIN_PASSWORD=$secret-admin" "PORTFOLIO_VIEWER_PASSWORD=$secret-viewer" > "$RUNNER_TEMP/portfolio.env"
           chmod 600 "$RUNNER_TEMP/portfolio.env"
-          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py migrate --noinput
-          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py createcachetable
+          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py release_portfolio
+          docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py release_portfolio
           docker run --rm --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci python manage.py check --deploy --fail-level ERROR
           docker run --detach --name portfolio --network host --env-file "$RUNNER_TEMP/portfolio.env" security-dashboard:ci
       - name: Check assembled application

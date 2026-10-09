@@ -118,3 +118,9 @@ class AccessAuditEntry(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class DemoDataset(models.Model):
+    """Record successful one-time provisioning of synthetic portfolio data."""
+    key = models.CharField(max_length=40, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)

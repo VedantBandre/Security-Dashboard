@@ -117,6 +117,17 @@ separate work; these checks do not establish production security.
 See [the deployment guide](DEPLOYMENT.md). Actual hosting, TLS, backups, monitoring,
 and public Viewer credentials are operator setup; the repository does not provision them.
 
+## Delivered: reproducible portfolio trial
+
+- Render Blueprint for one free Docker web service; database creation is deferred.
+- Serialized release setup compatible with the free service startup lifecycle.
+- One-time synthetic dataset with three case statuses and a read-only visitor account.
+- Restart tests protect demo data, notes, and account passwords.
+- Hosting walkthrough documents free-tier expiration and the remaining operator decisions.
+
+Actual Render application of the Blueprint and hosted verification follow after the
+configuration is merged and PostgreSQL connection settings are available.
+
 ## Next milestone: larger datasets
 
 - Server-side search, time filters, ordering, and pagination. Define whether

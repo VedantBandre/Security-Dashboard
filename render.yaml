@@ -1,0 +1,52 @@
+# Free web service only. Supply an existing PostgreSQL database before applying.
+# Merge this Blueprint before applying it in the Render Dashboard.
+services:
+  - type: web
+    name: security-dashboard-portfolio
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: sh bin/start_portfolio.sh
+    autoDeployTrigger: checksPass
+    healthCheckPath: /health/
+    numInstances: 1
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: DJANGO_ALLOWED_HOSTS
+        fromService:
+          type: web
+          name: security-dashboard-portfolio
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: DJANGO_TRUST_PROXY
+        value: "true"
+      # Keep direct-peer throttling until the ingress chain is verified.
+      - key: DJANGO_PROXY_COUNT
+        value: "0"
+      - key: DB_ENGINE
+        value: postgresql
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+      - key: PORTFOLIO_PROVISION
+        value: "true"
+      - key: PORTFOLIO_ADMIN_PASSWORD
+        sync: false
+      - key: PORTFOLIO_VIEWER_PASSWORD
+        sync: false
+      - key: WEB_CONCURRENCY
+        value: "2"

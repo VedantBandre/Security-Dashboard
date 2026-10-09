@@ -96,6 +96,8 @@ CACHES = {'default': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 
     'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
 SECURE_SSL_REDIRECT = PRODUCTION
+# Readiness exposes no credentials; internal HTTP probes must reach the database check.
+SECURE_REDIRECT_EXEMPT = [r'^health/$']
 SESSION_COOKIE_SECURE = PRODUCTION
 CSRF_COOKIE_SECURE = PRODUCTION
 SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
