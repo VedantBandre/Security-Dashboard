@@ -336,3 +336,43 @@ test('untrusted event fields render as text without injecting markup', async t =
     assert.equal(app.document.querySelector('dialog img'), null);
     assert.equal(app.window.injected, undefined);
 });
+
+test('portfolio visitor enters without credentials and can hide or reopen the guide', async (t) => {
+    const demo = { available: true, initialized_at: '2026-10-09T10:00:00Z' };
+    let loggedIn = false;
+    const app = mount(t, (url, options) => {
+        if (url === '/auth/demo-login') {
+            assert.equal(options.method, 'POST');
+            assert.equal(options.headers['X-CSRFToken'], 'guest-csrf');
+            assert.deepEqual(JSON.parse(options.body), {});
+            loggedIn = true;
+        }
+        if (url.startsWith('/auth/')) return { ok: true, json: async () => ({ user: loggedIn ? { id: 2, username: 'portfolio-viewer', display_name: 'Demo visitor', role: 'viewer' } : null, demo, csrf_token: 'guest-csrf' }) };
+        if (url === '/findings' || url === '/investigations' || url === '/users/assignable') return { ok: true, json: async () => [] };
+        return success(url);
+    }, undefined, '', false);
+    await waitFor(() => app.document.querySelector('.demo-entry'));
+    app.click('Explore demo');
+    await waitFor(() => app.document.querySelector('tbody tr'));
+    assert.match(app.document.body.textContent, /Read-only access/);
+    assert.match(app.document.body.textContent, /recent-activity chart may be empty/);
+    assert.ok(![...app.document.querySelectorAll('button')].some(button => button.textContent === 'Accounts'));
+    app.click('Hide guide');
+    await waitFor(() => !app.document.querySelector('.guide-steps'));
+    assert.equal(app.window.localStorage.getItem('security-dashboard-guide-hidden'), 'true');
+    app.click('Show guide');
+    await waitFor(() => app.document.querySelector('.guide-steps'));
+    app.click('Review findings');
+    await waitFor(() => app.calls.includes('/findings'));
+    assert.equal(app.window.location.hash, '#investigations');
+});
+
+test('demo sign-in failure remains recoverable on the entry screen', async (t) => {
+    const app = mount(t, url => ({ ok: url !== '/auth/demo-login', json: async () => url === '/auth/demo-login' ? { detail: 'Too many sign-in attempts. Try again shortly.' } : { user: null, csrf_token: 'csrf', demo: { available: true } } }), undefined, '', false);
+    await waitFor(() => app.document.querySelector('.demo-entry'));
+    app.click('Explore demo');
+    await waitFor(() => app.document.querySelector('[role="alert"]'));
+    assert.match(app.document.querySelector('[role="alert"]').textContent, /Too many sign-in attempts/);
+    assert.equal([...app.document.querySelectorAll('button')].find(button => button.textContent === 'Explore demo').disabled, false);
+    assert.ok(!app.calls.includes('/events'));
+});

@@ -6,6 +6,7 @@ import InvestigationsPage from './pages/InvestigationsPage';
 import './App.css';
 import { useSession } from './auth/SessionContext';
 import LoginPage from './pages/LoginPage';
+import PortfolioGuide from './components/PortfolioGuide';
 import AccountsPage from './pages/AccountsPage';
 
 function initialTheme() {
@@ -22,7 +23,7 @@ function pageFromHash() {
 }
 
 export default function App() {
-  const { user, loading, error: sessionError, logout } = useSession();
+  const { user, demo, loading, error: sessionError, logout } = useSession();
   const [logoutError, setLogoutError] = useState(null);
   const [page, setPage] = useState(pageFromHash);
   function navigate(nextPage) { setPage(nextPage); window.history.pushState(null, '', nextPage === 'dashboard' ? '#events' : `#${nextPage}`); window.dispatchEvent(new PopStateEvent('popstate')); }
@@ -56,14 +57,14 @@ export default function App() {
           <button className={`nav-btn ${page === 'investigations' ? 'active' : ''}`} aria-current={page === 'investigations' ? 'page' : undefined} onClick={() => navigate('investigations')}><Icon name="shield" />Investigations</button>
           {user.role === 'admin' && <button className={`nav-btn ${page === 'accounts' ? 'active' : ''}`} aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => navigate('accounts')}><Icon name="grid" />Accounts</button>}
         </nav>
-        <div className="sidebar-footer"><span className="environment-dot" />Local workspace<span className="sidebar-note">Authentication monitoring</span></div>
+        <div className="sidebar-footer"><span className="environment-dot" />{demo?.initialized_at ? 'Portfolio demo' : 'Workspace'}<span className="sidebar-note">Authentication monitoring</span></div>
       </aside>
       <div className="workspace">
         <header className="topbar">
           <div className="breadcrumb">Security operations <span>/</span> <strong>{page === 'dashboard' ? 'Events' : page === 'investigations' ? 'Investigations' : page === 'accounts' ? 'Accounts & access' : 'Suspicious activity'}</strong></div>
           <div className="session-actions"><span className="session-identity">{user.display_name}<small>{user.role === 'admin' ? 'Administrator' : user.role === 'analyst' ? 'Analyst' : 'Viewer'}</small></span>{themeButton}<button className="btn" onClick={() => { setLogoutError(null); logout().catch(error => setLogoutError(error.message)); }}>Sign out</button></div>
         </header>
-        <main className="main">{(sessionError || logoutError) && <div className="error-banner" role="alert">{sessionError || logoutError}</div>}{page === 'dashboard' ? <Dashboard /> : page === 'investigations' ? <InvestigationsPage /> : page === 'accounts' ? user.role === 'admin' ? <AccountsPage /> : <div className="empty">Administrator access is required.</div> : <SuspiciousPage />}</main>
+        <main className="main">{demo?.initialized_at && <PortfolioGuide demo={demo} role={user.role} onNavigate={navigate} />}{(sessionError || logoutError) && <div className="error-banner" role="alert">{sessionError || logoutError}</div>}{page === 'dashboard' ? <Dashboard /> : page === 'investigations' ? <InvestigationsPage /> : page === 'accounts' ? user.role === 'admin' ? <AccountsPage /> : <div className="empty">Administrator access is required.</div> : <SuspiciousPage />}</main>
       </div>
     </div>
   );

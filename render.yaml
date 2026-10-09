@@ -42,6 +42,8 @@ services:
         sync: false
       - key: DB_SSLMODE
         value: require
+      - key: PORTFOLIO_MODE
+        value: "true"
       - key: PORTFOLIO_PROVISION
         value: "true"
       - key: PORTFOLIO_ADMIN_PASSWORD

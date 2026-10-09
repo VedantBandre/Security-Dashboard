@@ -35,6 +35,7 @@ Security Dashboard is a local SOC demo built with **React, Vite, Django REST Fra
 | Detection evidence | Read the rule, threshold, observed count, time window, and captured events | **Investigations → Findings** |
 | Case management | Open a case, assign an analyst, set severity, and track status | **Investigations → Cases** |
 | Decisions and history | Add attributed notes, resolve with a reason, and reopen cases | **Open case** |
+| Portfolio walkthrough | Enter the synthetic demo without credentials and follow events, evidence, and case decisions | **Explore demo**, when enabled |
 | Account administration | Provision accounts, change roles, deactivate access, and review access history | **Accounts**, administrator only |
 | Appearance | Switch between light and dark mode; remember your choice locally | Top-right theme button |
 | Quality checks | Run lint, tests, builds, migration checks, and dependency audits | Local checks and GitHub Actions |
@@ -282,6 +283,23 @@ For a separate API origin, set `VITE_API_BASE` before starting/building the fron
 
 ## Portfolio hosting
 
+With `PORTFOLIO_MODE=true` and the sample workspace initialized, visitors can choose
+**Explore demo** on the sign-in page without credentials. A three-step guide points
+to event details, finding evidence, and the Cases tab, including a resolved sample
+with notes and audit history. Visitors have read-only access; administrators use
+normal private account sign-in. The guide can be hidden and reopened.
+
+![Read-only portfolio workspace with its guided walkthrough](docs/screenshots/portfolio-walkthrough.jpg)
+
+Demo access is disabled by default. It requires the `portfolio-v1` initialization
+marker and an active `portfolio-viewer` account with the Viewer role. Disabling the
+mode or deactivating/promoting the account revokes public guest access. This mode
+makes the initialized workspace publicly readable, so enable it only for synthetic
+portfolio data. For a local preview, initialize a fresh development database with
+`provision_portfolio` and the two private password environment values described in
+[the hosting walkthrough](docs/RENDER.md), then start Django with `PORTFOLIO_MODE=true`.
+
+
 The repository includes a single-origin production container: Gunicorn serves the
 Django API and built React workspace behind an HTTPS ingress, with PostgreSQL
 persistence. Production settings require a private secret and explicit hosts,
@@ -368,4 +386,4 @@ The default settings enable DEBUG, use a publicly known development secret, conf
 
 The production configuration and container are implemented. Public hosting still needs private runtime secrets, a correctly configured HTTPS ingress, infrastructure, backups, monitoring, and ingress abuse controls. Email recovery/verification and MFA are also future work. Automated checks reduce risk but do not certify production readiness.
 
-The next portfolio milestone is hosting a populated read-only demo with the deployment foundation. **Server-side event search and pagination** remains the next application scaling milestone. See the [development roadmap](docs/ROADMAP.md) for the proposed delivery order.
+The portfolio walkthrough and one-click read-only entry are ready. Public hosting remains deferred until a dedicated database is available. **Server-side event search and pagination** remains the next application scaling milestone. See the [development roadmap](docs/ROADMAP.md) for the proposed delivery order.

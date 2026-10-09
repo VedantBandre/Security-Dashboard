@@ -20,6 +20,7 @@ async function request(path, options = {}) {
 const jsonOptions = (method, data) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
 export const fetchSession = () => request('/auth/session');
 export const signIn = data => request('/auth/login', jsonOptions('POST', data));
+export const signInDemo = () => request('/auth/demo-login', jsonOptions('POST', {}));
 export const signOut = () => request('/auth/logout', jsonOptions('POST', {}));
 export const fetchEvents = () => request('/events');
 export const fetchSuspicious = () => request('/suspicious');

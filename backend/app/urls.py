@@ -5,6 +5,7 @@ from .accounts import (
     AssignableUsersView,
     UsersView,
     UserView,
+    demo_login_view,
     login_view,
     logout_view,
     session_view,
@@ -35,6 +36,7 @@ urlpatterns += [
 
 urlpatterns += [
     path('auth/session', session_view, name='auth-session'),
+    path('auth/demo-login', demo_login_view, name='auth-demo-login'),
     path('auth/login', login_view, name='auth-login'),
     path('auth/logout', logout_view, name='auth-logout'),
     path('users/assignable', AssignableUsersView.as_view(), name='assignable-users'),
